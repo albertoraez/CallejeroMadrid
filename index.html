@@ -537,10 +537,9 @@ function renderCard(p){
     mapS.pins=[{x:o.x,y:o.y,color:COL.pin}];mapS.fit([o.x,o.y,o.x,o.y],1300);
     options(opts,o.s,ok=>{mapS.labels=contextLabels(o,6);mapS.draw();$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(o.a)+"</div>");grade(key,ok?2:0,p.learn);});
   }else{
-    $("prompt").innerHTML='<div class="q">Marca en el mapa dónde está</div><div class="placa">'+esc(o.n)+"</div>"+(o.kind==="h"&&o.street?'<div class="extra">Da a la vía resaltada: '+esc(o.street.n)+"</div>":"");
+    $("prompt").innerHTML='<div class="q">Marca en el mapa dónde está</div><div class="placa">'+esc(o.n)+"</div>";
     let refL=[];
-    if(o.kind==="h"){refL=hitoRef(mapS,o,4);if(o.street){refL=[{s:o.street,force:true}];mapS.labels=refL;const b=o.street.b,m=350;mapS.fit([b[0]-m,b[1]-m,b[2]+m,b[3]+m],2200);}else{mapS.labels=refL;mapS.fit([o.x-900,o.y-900,o.x+900,o.y+900],0);}}
-    else mapS.fit(viewFor(o),0);
+    mapS.fit(viewFor(o),0);
     $("panel").innerHTML='<p class="hint" id="u-hint">Amplía y toca el mapa para poner el punto.</p><button class="btn primary block" id="b-chk" disabled>Comprobar</button>';
     let pin=null;
     mapS.onTap=(x,y)=>{if(session.answered)return;pin=[x,y];mapS.pins=[{x,y,color:COL.accent}];mapS.draw();$("b-chk").disabled=false;$("u-hint").textContent="Toca otra vez para mover el punto.";};
