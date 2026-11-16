@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Callejero Bomberos Madrid</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1b4f9c">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -543,6 +547,7 @@ const mq=window.matchMedia("(prefers-color-scheme: dark)");const recolor=()=>{re
 if(mq.addEventListener)mq.addEventListener("change",recolor);new MutationObserver(recolor).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{mapS.draw();mapE.draw();});
 loadLocal();refreshKnown();renderHome();renderSync();initCloud();
+try{if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)&&!/claude/.test(location.hostname))navigator.serviceWorker.register("sw.js").catch(()=>{});}catch(e){}
 </script>
 </body>
 </html>
