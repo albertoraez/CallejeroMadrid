@@ -194,6 +194,29 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
     </div>
   </section>
 
+  <section class="view" id="v-prac">
+    <div class="scroll">
+      <header><h1>Práctica libre</h1><p class="sub">Preguntas al azar. No cambia tu calendario de repasos.</p></header>
+      <div class="card">
+        <h2>Tipos de pregunta</h2>
+        <div class="chips" id="pr-types" style="padding:0"></div>
+      </div>
+      <div class="card">
+        <h2>Zonas</h2>
+        <div class="row" style="gap:8px"><button class="btn small" id="pr-all">Todas</button><button class="btn small" id="pr-none">Ninguna</button></div>
+        <div class="chips" id="pr-zones" style="padding:0"></div>
+      </div>
+      <div class="card">
+        <h2>Qué entra</h2>
+        <div class="chips" style="padding:0"><button class="chip on" id="pr-seen">Solo lo que ya he visto</button><button class="chip" id="pr-fails">Solo lo que más fallo</button></div>
+        <h2>Número de preguntas</h2>
+        <div class="chips" id="pr-n" style="padding:0"></div>
+        <p class="note" id="pr-info"></p>
+        <button class="btn primary block" id="pr-go">Empezar práctica</button>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="v-set">
     <div class="scroll">
       <header><h1>Ajustes</h1></header>
@@ -237,6 +260,7 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
   <nav id="tabs">
     <button data-v="home" class="on"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Hoy</button>
     <button data-v="map"><svg viewBox="0 0 24 24"><path d="M9 4l6 2 5-2v14l-5 2-6-2-5 2V6z"/><path d="M9 4v14M15 6v14"/></svg>Mapa</button>
+    <button data-v="prac"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/></svg>Práctica</button>
     <button data-v="set"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Ajustes</button>
   </nav>
 </div>
@@ -491,20 +515,48 @@ function pick(){const s=session;s.n++;
   return null;}
 function nextCard(){
   const s=session;const p=pick();s.cur=p;s.answered=false;
-  mapS.hl=[];mapS.pins=[];mapS.labels=[];mapS.onTap=null;mapS.showNames=false;
+  mapS.hl=[];mapS.pins=[];mapS.labels=[];mapS.onTap=null;mapS.showNames=false;mapS.showDir=false;
   $("st-left").textContent=p?"Quedan "+remaining():"";
   if(!p){finish();return;}
   if(p.type==="intro")renderIntro(p.o);else renderCard(p);
 }
+const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito"]];
+const PR=Object.assign({types:["sn","su","hn","hu","hc"],zones:G.map((_,i)=>i),seen:true,fails:false,n:20},lsGet("prac")||{});
+function prPool(){const out=[];for(const gi of PR.zones){const g=G[gi];if(!g)continue;for(const o of g.items){
+    for(const t of PR.types){if(t[0]!==o.kind)continue;const c=t[1];
+      if(c==="c"&&!o.hasSt)continue;if(c==="d"&&![1,2,4].includes(o.ow))continue;
+      if(PR.seen&&!introduced(o))continue;
+      if(PR.fails){const cc=ST.cards[o.key+(c==="d"?"n":c)];if(!cc||(cc[4]<1&&cc[2]>=230))continue;}
+      out.push(o.key+c);}}}return out;}
+function renderPrac(){
+  const mk=(box,list,isOn,toggle)=>{const e=$(box);e.innerHTML="";list.forEach(([v,l])=>{const b=document.createElement("button");b.className="chip"+(isOn(v)?" on":"");b.textContent=l;b.onclick=()=>{toggle(v);lsSet("prac",PR);renderPrac();};e.appendChild(b);});};
+  const tg=(arr,v)=>{const i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v);};
+  mk("pr-types",PT,v=>PR.types.includes(v),v=>tg(PR.types,v));
+  mk("pr-zones",G.map((g,i)=>[i,g.name]),v=>PR.zones.includes(v),v=>tg(PR.zones,v));
+  mk("pr-n",[[10,"10"],[20,"20"],[40,"40"],[100,"100"]],v=>PR.n===v,v=>{PR.n=v;});
+  $("pr-seen").classList.toggle("on",PR.seen);$("pr-fails").classList.toggle("on",PR.fails);
+  const n=prPool().length;$("pr-info").textContent=n?n.toLocaleString("es-ES")+" preguntas posibles con estos filtros.":(PR.seen?"No hay preguntas: aún no has visto nada de estas zonas. Quita «Solo lo que ya he visto» para practicar con todo.":"Elige al menos un tipo y una zona.");
+  $("pr-go").disabled=!n;}
+$("pr-seen").onclick=()=>{PR.seen=!PR.seen;lsSet("prac",PR);renderPrac();};
+$("pr-fails").onclick=()=>{PR.fails=!PR.fails;lsSet("prac",PR);renderPrac();};
+$("pr-all").onclick=()=>{PR.zones=G.map((_,i)=>i);lsSet("prac",PR);renderPrac();};
+$("pr-none").onclick=()=>{PR.zones=[];lsSet("prac",PR);renderPrac();};
+$("pr-go").onclick=()=>{const keys=shuffle(prPool()).slice(0,PR.n);if(!keys.length)return;
+  session={practice:true,rev:keys,learn:[],news:[],n:0,sinceNew:0,cur:null,answered:false,done:0,ok:0,total:keys.length};refreshKnown();show("study");nextCard();};
 function finish(){
+  if(session.practice){$("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
+    const pc=Math.round(100*session.ok/Math.max(1,session.done));
+    $("panel").innerHTML='<div class="fb '+(pc>=80?"ok":pc>=50?"warn":"bad")+'">'+session.ok+" de "+session.done+" correctas ("+pc+' %).</div><button class="btn primary block" id="b-again">Otra ronda</button><button class="btn block" id="b-fin">Volver</button>';
+    mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;$("b-again").onclick=()=>{session=null;$("pr-go").onclick();};return;}
   $("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
   const due=countDue(),nb=newBudget();
   $("panel").innerHTML='<div class="fb ok">Sesión terminada. Has contestado '+session.done+' tarjetas.</div><button class="btn primary block" id="b-fin">Volver al inicio</button>';
   mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;
 }
-function exitStudy(){session=null;flush();refreshKnown();renderHome();show("home");if(sbUser)sbSync();}
+function exitStudy(){const pr=session&&session.practice;session=null;flush();refreshKnown();renderHome();show(pr?"prac":"home");if(sbUser)sbSync();}
 function grade(key,res,lr){
   mapS.showNames=true;mapS.draw(); /* res: 2 bien, 1 casi, 0 mal */
+  if(session.practice){session.done++;if(res===2)session.ok++;return;}
   const s=session,t=dayNum();let c=ST.cards[key];if(!c)c=ST.cards[key]=[t,0,230,0,0,0];
   s.done++;ST.meta.dRev++;
   if(c[3]===0){ // aprendizaje
@@ -544,7 +596,7 @@ function renderIntro(o){
 function renderCard(p){
   const key=p.key,o=byKey[key.slice(0,-1)],type=key.slice(-1);
   if(!o){nextCard();return;}
-  $("st-tag").textContent=(ST.cards[key]&&ST.cards[key][3]>0&&!(p.learn&&p.learn.re))?"Repaso":"Aprendiendo";$("st-tag").className="tag";
+  if(session.practice){$("st-tag").textContent="Práctica";$("st-tag").className="tag";}else $("st-tag").textContent=(ST.cards[key]&&ST.cards[key][3]>0&&!(p.learn&&p.learn.re))?"Repaso":"Aprendiendo";$("st-tag").className="tag";
   if(type==="n"){
     const pool=o.kind==="s"?S:H,opts=shuffle(shuffle(nearest(o,pool,8)).slice(0,3).concat([o]));
     $("prompt").innerHTML='<div class="q">'+(o.kind==="s"?(o.t==="Plaza"||o.t==="Glorieta"?"¿Qué "+o.t.toLowerCase()+" es la resaltada?":"¿Qué vía es la resaltada?"):"¿Qué hito hay en el punto marcado?")+"</div>";
@@ -552,6 +604,11 @@ function renderCard(p){
     options(opts.map(x=>x.n),o.n,ok=>{
       if(o.kind==="s")mapS.labels=contextLabels(o,5).concat([{s:o,force:true}]);else{mapS.pins[0].label=o.n;mapS.labels=mapS.labels.concat(contextLabels(o,5).filter(l=>l.s!==o.street));}
       mapS.draw();grade(key,ok?2:0,p.learn);});
+  }else if(type==="d"){
+    const T={1:"Doble sentido",2:"Sentido único",4:"Doble sentido"},right=T[o.ow];
+    $("prompt").innerHTML='<div class="q">¿Cómo se circula por esta vía?</div><div class="placa">'+esc(o.n)+"</div>";
+    mapS.hl=[{s:o,color:COL.target}];mapS.labels=[{s:o,force:true}];mapS.fit(o.b,spanOf(o,1.4,320));
+    options(["Sentido único","Doble sentido"],right,ok=>{mapS.showDir=true;mapS.draw();$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(OWTXT[o.ow])+"</div>");grade(key,ok?2:0,p.learn);});
   }else if(type==="c"){
     const others=[];for(const h of nearest(o,H.filter(h=>h.hasSt),30)){if(h.s!==o.s&&!others.includes(h.s))others.push(h.s);if(others.length>=6)break;}
     const opts=shuffle(shuffle(others).slice(0,3).concat([o.s]));
@@ -618,7 +675,7 @@ function show(v){for(const s of document.querySelectorAll(".view"))s.classList.t
   $("tabs").style.display=v==="study"?"none":"";for(const b of document.querySelectorAll("#tabs button"))b.classList.toggle("on",b.dataset.v===v);
   if(v==="map"){mapE.resize();if(!mapE.inited){mapE.inited=true;mapE.fit(CITY,0);}}
   if(v==="study")mapS.resize();
-  if(v==="home")renderHome();if(v==="set"){renderHome();renderSync();renderSb();}}
+  if(v==="home")renderHome();if(v==="prac")renderPrac();if(v==="set"){renderHome();renderSync();renderSb();}}
 for(const b of document.querySelectorAll("#tabs button"))b.onclick=()=>show(b.dataset.v);
 for(const b of document.querySelectorAll(".zoom button"))b.onclick=()=>{(b.closest("#v-study")?mapS:mapE).zoom(parseFloat(b.dataset.z));};
 $("b-study").onclick=startSession;$("b-exit").onclick=exitStudy;
