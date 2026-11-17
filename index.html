@@ -536,21 +536,26 @@ class MapView{
         const segs=[];for(let j=1;j<K.length;j++){const A=S[K[j-1]],B=S[K[j]],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy);if(L<0.5)continue;const ow=EDGE1.get(seq[K[j-1]]+","+seq[K[j-1]+1]);const o=(ow===1)?0:off,ux=dx/L,uy=dy/L,nx=-uy*o,ny=ux*o;segs.push({a:[A[0]+nx,A[1]+ny],b:[B[0]+nx,B[1]+ny],ux,uy,L});}
         if(segs.length<2)return;
         const back=Math.max(22,Math.min(60,24*k)),fw=Math.max(34,Math.min(80,30*k));
-        /* el tramo final puede estar partido en varios nodos: avanzar fw píxeles a lo largo de ellos */
-        const f=segs[0],l=segs[segs.length-1];
-        const st=[f.b[0]-f.ux*back,f.b[1]-f.uy*back];
-        let en=[l.a[0]+l.ux*Math.min(fw,l.L),l.a[1]+l.uy*Math.min(fw,l.L)];
-        /* esquinas: cruce de los segmentos desplazados consecutivos */
-        const corners=[];for(let q=1;q<segs.length;q++){const s1=segs[q-1],s2=segs[q];const den=s1.ux*s2.uy-s1.uy*s2.ux;
-          if(Math.abs(den)<0.08){corners.push([(s1.b[0]+s2.a[0])/2,(s1.b[1]+s2.a[1])/2]);continue;}
-          const t=((s2.a[0]-s1.a[0])*s2.uy-(s2.a[1]-s1.a[1])*s2.ux)/den;let px=s1.a[0]+s1.ux*t,py=s1.a[1]+s1.uy*t;
-          const mx=(s1.b[0]+s2.a[0])/2,my=(s1.b[1]+s2.a[1])/2;if(Math.hypot(px-mx,py-my)>3*off+20){px=mx;py=my;}corners.push([px,py]);}
-        const r=Math.max(8,Math.min(22,10*k));
-        c.beginPath();c.moveTo(st[0],st[1]);
-        for(let q=0;q<corners.length;q++){const nxt=q+1<corners.length?corners[q+1]:en;c.arcTo(corners[q][0],corners[q][1],nxt[0],nxt[1],r);}
-        c.lineTo(en[0],en[1]);
+        /* polilínea desplazada: en cada vértice, punto medio entre el final de un tramo y el inicio del siguiente (nunca sale un pico) */
+        const f=segs[0];const V=[[f.b[0]-f.ux*back,f.b[1]-f.uy*back]];
+        for(let q=1;q<segs.length;q++){const s1=segs[q-1],s2=segs[q];V.push([(s1.b[0]+s2.a[0])/2,(s1.b[1]+s2.a[1])/2]);}
+        const lst=segs[segs.length-1];V.push(lst.b);
+        /* hasta dónde dibujar después del cruce: toda la maniobra y luego fw píxeles por la calle de salida */
+        const lastOrig=1+e.p.length;let Ls=0;for(let q=2;q<lastOrig&&q<S.length;q++)Ls+=Math.hypot(S[q][0]-S[q-1][0],S[q][1]-S[q-1][1]);
+        const endLen=Ls+fw;
+        const T=[V[0],V[1]];let acc=0,dir=[f.ux,f.uy];
+        for(let q=2;q<V.length;q++){const a=V[q-1],b=V[q],L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L<0.5)continue;const ux=(b[0]-a[0])/L,uy=(b[1]-a[1])/L;
+          if(acc+L>=endLen){const t=endLen-acc;T.push([a[0]+ux*t,a[1]+uy*t]);dir=[ux,uy];acc=endLen;break;}T.push(b);dir=[ux,uy];acc+=L;}
+        if(T.length<3)return;
+        /* esquinas redondeadas con radio limitado: la curva queda siempre dentro del trazado y no da vueltas */
+        const r=Math.max(9,Math.min(24,9*k));
+        c.beginPath();c.moveTo(T[0][0],T[0][1]);
+        for(let q=1;q<T.length-1;q++){const A=T[q-1],B=T[q],C=T[q+1];const l1=Math.hypot(B[0]-A[0],B[1]-A[1])||1,l2=Math.hypot(C[0]-B[0],C[1]-B[1])||1;
+          const r1=Math.min(r,l1/2),r2=Math.min(r,l2/2);
+          c.lineTo(B[0]-(B[0]-A[0])/l1*r1,B[1]-(B[1]-A[1])/l1*r1);c.quadraticCurveTo(B[0],B[1],B[0]+(C[0]-B[0])/l2*r2,B[1]+(C[1]-B[1])/l2*r2);}
+        const en=T[T.length-1];c.lineTo(en[0],en[1]);
         c.strokeStyle=col;c.lineWidth=wd;c.setLineDash(dash?[7,6]:[]);c.stroke();c.setLineDash([]);
-        const vx=l.ux,vy=l.uy,hs=wd>2?9:6;c.beginPath();c.moveTo(en[0]-vx*hs-vy*hs*.7,en[1]-vy*hs+vx*hs*.7);c.lineTo(en[0],en[1]);c.lineTo(en[0]-vx*hs+vy*hs*.7,en[1]-vy*hs-vx*hs*.7);c.stroke();};
+        const vx=dir[0],vy=dir[1],hs=wd>2?9:6;c.beginPath();c.moveTo(en[0]-vx*hs-vy*hs*.7,en[1]-vy*hs+vx*hs*.7);c.lineTo(en[0],en[1]);c.lineTo(en[0]-vx*hs+vy*hs*.7,en[1]-vy*hs-vx*hs*.7);c.stroke();};
       this._curve=curve;
       if(this.focus){const app=this.focus,run=this.focusRun||[{app,path:[app.u,app.n]}];
         /* toda la calle en el sentido elegido, resaltada debajo */
