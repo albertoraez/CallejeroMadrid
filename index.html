@@ -98,6 +98,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 .opt{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;min-height:44px;text-align:left;font-weight:500;font-size:15.5px;line-height:1.2}
 .opt.good{background:var(--ok-soft);border-color:var(--ok);color:var(--ok);font-weight:600}
 .opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.opt.half{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
 .fb{font-weight:600;font-size:15px;padding:8px 12px;border-radius:8px}
 .fb.ok{background:var(--ok-soft);color:var(--ok)} .fb.bad{background:var(--bad-soft);color:var(--bad)} .fb.warn{background:var(--warn-soft);color:var(--warn)}
 .hint{font-size:14px;color:var(--muted);margin:0}
@@ -113,6 +114,11 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 .chip.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 #info{position:absolute;left:60px;right:60px;bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:600;font-size:15px;display:none}
 #info small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+#info{max-height:42%;overflow:auto;overscroll-behavior:contain}
+.ln-list{margin-top:6px;border-top:1px solid var(--line);padding-top:4px}
+.ln-h{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:2px}
+.ln-row{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:5px 0;font:inherit;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer}
+.ln-row:first-of-type{border-top:0}
 .stepper{display:flex;align-items:center;gap:10px}
 .stepper b{font-family:var(--f-display);font-size:26px;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
 .stepper button{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:22px;font-weight:600}
@@ -122,6 +128,13 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
 #gate[hidden]{display:none}
 .gate-card{width:100%;max-width:400px;display:flex;flex-direction:column;gap:14px}
 .gate-txt{margin:6px 0 4px;color:var(--ink);font-size:16px}
+.rep-link{align-self:flex-start;border:0;background:none;color:var(--muted);font-size:13.5px;font-weight:600;padding:4px 2px;text-decoration:underline;text-underline-offset:3px}
+.rep-box{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg)}
+.rep-box textarea{min-height:70px;font:inherit;font-size:15px}
+.rep-item{border-top:1px solid var(--line);padding:10px 0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.rep-item:first-child{border-top:0}
+.rep-item b{font-weight:600}
+.rep-item .meta{font-size:12.5px;color:var(--muted)}
 @media (min-width:900px){
   #app{max-width:none;flex-direction:row}
   #tabs{order:-1;flex-direction:column;justify-content:flex-start;gap:6px;width:96px;border-top:0;border-right:1px solid var(--line);padding:16px 8px}
@@ -275,6 +288,16 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
         </div>
       </div>
       <div class="card">
+        <h2>Errores reportados</h2>
+        <p class="note" id="rep-sum"></p>
+        <div id="rep-list"></div>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn small primary" id="rep-copy">Copiar todos</button>
+          <button class="btn small" id="rep-dl">Descargar</button>
+        </div>
+        <p class="note" id="rep-msg" role="status"></p>
+      </div>
+      <div class="card">
         <h2>Empezar de cero</h2>
         <p class="note">Borra todo el progreso de este dispositivo y de tu cuenta.</p>
         <button class="btn small" id="b-reset">Borrar progreso</button>
@@ -338,15 +361,29 @@ const mkPath=list=>{const p=new Path2D();for(const fl of list){let x=0,y=0;for(l
 function cellPaths(list){const M=new Map();for(const fl of list){let x=0,y=0;const p=new Path2D(),b=[1e9,1e9,-1e9,-1e9];for(let i=0;i<fl.length;i+=2){x+=fl[i];y+=fl[i+1];if(i)p.lineTo(x,-y);else p.moveTo(x,-y);if(x<b[0])b[0]=x;if(x>b[2])b[2]=x;if(y<b[1])b[1]=y;if(y>b[3])b[3]=y;}p.closePath();for(const key of cellsOf(b))addCell(M,key,p);}return M;}
 const GREENC=cellPaths(GW.g),WATERC=cellPaths(GW.w);delete GW.g;delete GW.w;
 /* circulación: líneas por sentido y salidas de cada cruce, por trozos de 4 km */
-const NODE=new Map(),LT={},APP=new Map(),EDGE1=new Map();let ltFail=0;
+const NODE=new Map(),LT={},APP=new Map(),EDGE1=new Map(),ADJ=new Map();
+const adjAdd=(a,b,nm)=>{let L=ADJ.get(a);if(!L){L=[];ADJ.set(a,L);}if(!L.some(x=>x[0]===b))L.push([b,nm]);};let ltFail=0;
 function lTile(i,j,cb){const k=i+"_"+j;const t=LT[k];if(t)return t.d||null;if(!BT_OK||ltFail>4)return null;LT[k]={d:null};
   fetch("g/"+k+".json").then(r=>{if(r.status===404)return {n:[],w:[],a:[],s:[]};if(!r.ok)throw 0;return r.json();}).then(d=>{
     for(let q=0;q<d.n.length;q+=3)NODE.set(d.n[q],[d.n[q+1],d.n[q+2]]);
     for(const a of d.a)APP.set(a[0]+","+a[1],[a,d.s]);
-    for(const w of d.w){const L=w[2];for(let q=1;q<L.length;q++){EDGE1.set(L[q-1]+","+L[q],w[0]);EDGE1.set(L[q]+","+L[q-1],w[0]===1?-1:0);}}
+    for(const w of d.w){const L=w[2],nm=d.s[w[1]]||"";for(let q=1;q<L.length;q++){EDGE1.set(L[q-1]+","+L[q],w[0]);EDGE1.set(L[q]+","+L[q-1],w[0]===1?-1:0);adjAdd(L[q-1],L[q],nm);if(w[0]!==1)adjAdd(L[q],L[q-1],nm);}}
     d.cells=new Map();for(const w of d.w){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of w[2]){const p=NODE.get(q);if(!p)continue;if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];}if(x0>x1)continue;for(let i=Math.floor(x0/1000);i<=Math.floor(x1/1000);i++)for(let j=Math.floor(y0/1000);j<=Math.floor(y1/1000);j++){const key=i+"_"+j;let L=d.cells.get(key);if(!L){L=[];d.cells.set(key,L);}L.push(w);}}
     LT[k].d=d;cb();}).catch(()=>{ltFail++;delete LT[k];});return null;}
 function getApp(key){const v=APP.get(key);if(!v)return null;if(!Array.isArray(v))return v;const [a,s]=v;const o={u:a[0],n:a[1],name:s[a[2]],ex:a[3].map(e=>({p:e[0],st:e[1],kind:e[2],name:s[e[3]],lab:e.length>4?s[e[4]]:""}))};APP.set(key,o);return o;}
+/* siguiente nodo al avanzar de a a b: misma calle y lo más recto posible */
+function nextNode(a,b,nm){const L=ADJ.get(b);if(!L)return null;const A=NODE.get(a),B=NODE.get(b);if(!A||!B)return null;const ux=B[0]-A[0],uy=B[1]-A[1],ul=Math.hypot(ux,uy)||1;let best=null,bs=-9;
+  for(const [c,n] of L){if(c===a)continue;const C=NODE.get(c);if(!C)continue;const vx=C[0]-B[0],vy=C[1]-B[1],vl=Math.hypot(vx,vy)||1;const sc=(ux*vx+uy*vy)/(ul*vl)+(nm&&n===nm?1:0);if(sc>bs){bs=sc;best=c;}}return bs>-0.2?best:null;}
+/* recorre la calle desde un cruce en el sentido de llegada y devuelve todos los cruces que va encontrando */
+function streetRun(app){const out=[{app,path:[app.u,app.n]}],seen=new Set([app.u+","+app.n]);let cur=app;
+  for(let it=0;it<80;it++){const nm=cur.name||app.name;
+    let e=cur.ex.find(e=>e.st===0&&e.kind===0&&(!nm||e.name===nm))||cur.ex.find(e=>e.st===0&&nm&&e.name===nm&&e.kind!==3);if(!e)break;
+    const path=[cur.n,...e.p];let a=path[path.length-2],b=path[path.length-1],nx=null;
+    for(let st=0;st<120;st++){const k=a+","+b;if(st>0||e.p.length){const g=getApp(k);if(g&&!seen.has(k)){nx=g;break;}}const c=nextNode(a,b,nm);if(c==null)break;path.push(c);a=b;b=c;}
+    if(!nx||(app.name&&nx.name&&nx.name!==app.name))break;seen.add(nx.u+","+nx.n);out.push({app:nx,path});cur=nx;}
+  return out;}
+/* salidas que merece la pena enseñar: las prohibidas hacia vías sin nombre solo confunden */
+const showEx=e=>e.st===0||!!e.name;
 function visWays(tl,v0,v1){const out=[],seen=new Set();for(const d of tl){if(!d.cells)continue;for(let i=Math.floor(v0[0]/1000);i<=Math.floor(v1[0]/1000);i++)for(let j=Math.floor(v0[1]/1000);j<=Math.floor(v1[1]/1000);j++){const L=d.cells.get(i+"_"+j);if(L)for(const w of L)if(!seen.has(w)){seen.add(w);out.push(w);}}}return out;}
 /* distritos y barrios */
 function decRings(L){return L.map(fl=>{const a=new Float32Array(fl.length);let x=0,y=0;for(let i=0;i<fl.length;i+=2){x+=fl[i];y+=fl[i+1];a[i]=x;a[i+1]=y;}return a;});}
@@ -422,32 +459,42 @@ class MapView{
     const g=sn.getContext("2d");g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,sn.width,sn.height);g.drawImage(cv,0,0);this.snapV=[this.cx,this.cy,this.k,this.W,this.H];}
   fast(){const c=this.ctx,d=this.dpr||1,[cx0,cy0,k0,W0,H0]=this.snapV;if(W0!==this.W||H0!==this.H){this.paint();this.keepSnap();return;}
     const s=this.k/k0,tx=d*((cx0-this.cx)*this.k+this.W/2*(1-s)),ty=d*((this.cy-cy0)*this.k+this.H/2*(1-s));
-    c.setTransform(1,0,0,1,0,0);c.fillStyle=COL["map-bg"];c.fillRect(0,0,this.cv.width,this.cv.height);c.setTransform(s,0,0,s,tx,ty);c.drawImage(this.snap,0,0);c.setTransform(1,0,0,1,0,0);}
+    c.setTransform(1,0,0,1,0,0);c.fillStyle=COL["map-bg"];c.fillRect(0,0,this.cv.width,this.cv.height);
+    const sw=this.snap.width*s,sh=this.snap.height*s;if(tx>0||ty>0||tx+sw<this.cv.width||ty+sh<this.cv.height)this.drawBase(c,d,this.k,1);
+    c.setTransform(s,0,0,s,tx,ty);c.drawImage(this.snap,0,0);c.setTransform(1,0,0,1,0,0);}
   /* fondo en baldosas cacheadas por nivel de zoom */
   baseLayers(c,k,V0,V1){
     c.fillStyle=COL.green;fillCells(c,GREENC,V0,V1);c.fillStyle=COL.water;fillCells(c,WATERC,V0,V1);
     if(k>=0.3){c.fillStyle=COL.bldg;let pending=false;
-      for(let i=Math.floor(V0[0]/8000);i<=Math.floor(V1[0]/8000);i++)for(let j=Math.floor(V0[1]/8000);j<=Math.floor(V1[1]/8000);j++){const t=bTile(i,j,()=>{this.tc.clear();this.draw();});if(t)fillBld(c,t,V0,V1);}}
+      for(let i=Math.floor(V0[0]/8000);i<=Math.floor(V1[0]/8000);i++)for(let j=Math.floor(V0[1]/8000);j<=Math.floor(V1[1]/8000);j++){const t=bTile(i,j,()=>{this.dropTiles([i*8000,j*8000,(i+1)*8000,(j+1)*8000]);this.draw();});if(t)fillBld(c,t,V0,V1);}}
     c.fillStyle=COL.street;fillCells(c,ALLC,V0,V1);if(k<0.3){c.strokeStyle=COL.street;c.lineWidth=1/k;strokeCells(c,ALLC,V0,V1);}
     if(this.known&&this.showKnown){c.fillStyle=COL.known;fillCells(c,this.known,V0,V1);if(k<0.3){c.strokeStyle=COL.known;c.lineWidth=1/k;strokeCells(c,this.known,V0,V1);}}
     c.fillStyle=COL.hwy;fillCells(c,HWYC,V0,V1);if(k<0.3){c.strokeStyle=COL.hwy;c.lineWidth=1.4/k;strokeCells(c,HWYC,V0,V1);}}
-  drawBase(c,d,k){
+  dropTiles(b){if(!this.tc)return;for(const [key,t] of [...this.tc]){const B=t._b;if(B&&B[0]<b[2]&&B[2]>b[0]&&B[1]<b[3]&&B[3]>b[1])this.tc.delete(key);}}
+  tileRect(t,d,k){const B=t._b;return[Math.round(((B[0]-this.cx)*k+this.W/2)*d),Math.round(((this.cy-B[3])*k+this.H/2)*d),Math.round(((B[2]-this.cx)*k+this.W/2)*d),Math.round(((this.cy-B[1])*k+this.H/2)*d)];}
+  /* budget: baldosas nuevas que se pueden generar en este fotograma; lo que falte se cubre con baldosas de otros niveles ya hechas */
+  drawBase(c,d,k,budget){
     if(!this.tc)this.tc=new Map();const TS=512;
-    const L=0.0125*Math.pow(2,Math.ceil(Math.log2(Math.max(k,0.0125)/0.0125)-1e-9)),kd=L*d,sc=k/L;
+    const L=0.0125*Math.pow(2,Math.ceil(Math.log2(Math.max(k,0.0125)/0.0125)-1e-9)),kd=L*d;
     const v0=this.toWorld(0,this.H),v1=this.toWorld(this.W,0);
     const tx0=Math.floor(v0[0]*kd/TS),tx1=Math.floor(v1[0]*kd/TS),ty0=Math.floor(-v1[1]*kd/TS),ty1=Math.floor(-v0[1]*kd/TS);
-    let budget=this.tilesBudget||3,missing=false;
-    for(let tx=tx0;tx<=tx1;tx++)for(let ty=ty0;ty<=ty1;ty++){
+    if(budget===undefined)budget=this.tilesBudget||3;let missing=false;const have=[];
+    /* primero las del centro, que es donde se mira */
+    const order=[];for(let tx=tx0;tx<=tx1;tx++)for(let ty=ty0;ty<=ty1;ty++)order.push([tx,ty,Math.abs(tx-(tx0+tx1)/2)+Math.abs(ty-(ty0+ty1)/2)]);order.sort((a,b)=>a[2]-b[2]);
+    for(const [tx,ty] of order){
       const key=L+":"+tx+":"+ty+":"+d;let t=this.tc.get(key);
       if(!t){if(budget<=0){missing=true;continue;}budget--;
         t=document.createElement("canvas");t.width=TS;t.height=TS;const g=t.getContext("2d");g.setTransform(kd,0,0,kd,-tx*TS,-ty*TS);g.lineJoin="round";
-        const W0=[tx*TS/kd,-(ty+1)*TS/kd],W1=[(tx+1)*TS/kd,-ty*TS/kd];this.baseLayers(g,L,W0,W1);
-        this.tc.set(key,t);if(this.tc.size>34){const first=this.tc.keys().next().value;this.tc.delete(first);}}
+        const W0=[tx*TS/kd,-(ty+1)*TS/kd],W1=[(tx+1)*TS/kd,-ty*TS/kd];this.baseLayers(g,L,W0,W1);t._b=[W0[0],W0[1],W1[0],W1[1]];t._L=L;t._d=d;
+        this.tc.set(key,t);if(this.tc.size>56){const first=this.tc.keys().next().value;this.tc.delete(first);}}
       else{this.tc.delete(key);this.tc.set(key,t);}
-      const X=Math.round(((tx*TS/kd-this.cx)*k+this.W/2)*d),Y=Math.round(((this.cy+(ty*TS)/kd)*k+this.H/2)*d);
-      const X2=Math.round((((tx+1)*TS/kd-this.cx)*k+this.W/2)*d),Y2=Math.round(((this.cy+((ty+1)*TS)/kd)*k+this.H/2)*d);
-      c.setTransform(1,0,0,1,0,0);c.drawImage(t,X,Y,X2-X+1,Y2-Y+1);}
-    if(missing){clearTimeout(this.moreT);this.moreT=setTimeout(()=>this.draw(),0);}}
+      have.push(t);}
+    c.setTransform(1,0,0,1,0,0);
+    if(missing){const vb=[v0[0],v0[1],v1[0],v1[1]];const fb=[...this.tc.values()].filter(t=>t._d===d&&t._L!==L&&t._L>=L/8&&t._L<=L*4&&t._b[0]<vb[2]&&t._b[2]>vb[0]&&t._b[1]<vb[3]&&t._b[3]>vb[1]).sort((a,b)=>a._L-b._L);
+      for(const t of fb){const r=this.tileRect(t,d,k);c.drawImage(t,r[0],r[1],r[2]-r[0]+1,r[3]-r[1]+1);}
+      clearTimeout(this.moreT);this.moreT=setTimeout(()=>this.draw(),16);}
+    for(const t of have){const r=this.tileRect(t,d,k);c.drawImage(t,r[0],r[1],r[2]-r[0]+1,r[3]-r[1]+1);}
+    return missing;}
   paint(){const c=this.ctx,d=this.dpr||1,k=this.k;if(!this.W)return;
     c.setTransform(1,0,0,1,0,0);c.fillStyle=COL["map-bg"];c.fillRect(0,0,this.cv.width,this.cv.height);
     c.setTransform(k*d,0,0,k*d,(this.W/2-this.cx*k)*d,(this.H/2+this.cy*k)*d);
@@ -479,14 +526,20 @@ class MapView{
       c.beginPath();for(const [x,y,ux,uy] of this._arr){const s=3+lw*1.4;c.moveTo(x-ux*s-uy*s,y-uy*s+ux*s);c.lineTo(x,y);c.lineTo(x-ux*s+uy*s,y-uy*s-ux*s);}c.lineWidth=Math.max(2.2,lw*.8);c.stroke();
       /* curvas de giro permitidas */
       const curve=(app,e,col,dash,wd)=>{
-        const seq=[app.u,app.n,...e.p];const S=[];for(const q of seq){const z=P(q);if(!z)return;S.push(this.toScreen(z[0],z[1]));}
+        const seq=[app.u,app.n,...e.p];const need=Math.max(34,Math.min(80,30*k))/k;
+        {let len=0;for(let q=2;q<seq.length;q++){const a=P(seq[q-1]),b=P(seq[q]);if(a&&b)len+=Math.hypot(b[0]-a[0],b[1]-a[1]);}
+          for(let g=0;g<4&&len<need&&seq.length>=2;g++){const c=nextNode(seq[seq.length-2],seq[seq.length-1],e.name);if(c==null)break;const a=P(seq[seq.length-1]),b=P(c);if(!b)break;len+=Math.hypot(b[0]-a[0],b[1]-a[1]);seq.push(c);}}
+        const S=[];for(const q of seq){const z=P(q);if(!z)return;S.push(this.toScreen(z[0],z[1]));}
         /* segmentos desplazados igual que las líneas dibujadas: centrados si la vía es de sentido único, a la derecha si es de doble sentido */
-        const segs=[];for(let q=1;q<S.length;q++){const A=S[q-1],B=S[q],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy);if(L<0.5)continue;const ow=EDGE1.get(seq[q-1]+","+seq[q]);const o=(ow===1)?0:off,ux=dx/L,uy=dy/L,nx=-uy*o,ny=ux*o;segs.push({a:[A[0]+nx,A[1]+ny],b:[B[0]+nx,B[1]+ny],ux,uy,L});}
+        /* nodos muy juntos (cruces partidos en trozos de pocos metros) hacen bucles: se saltan los que quedan a menos de minL píxeles */
+        const minL=Math.max(12,off*1.6),K=[0,1];for(let q=2;q<S.length;q++){const lp=S[K[K.length-1]],d=Math.hypot(S[q][0]-lp[0],S[q][1]-lp[1]);if(d>=minL)K.push(q);else if(q===S.length-1&&d>1){if(K.length>2)K[K.length-1]=q;else K.push(q);}}
+        const segs=[];for(let j=1;j<K.length;j++){const A=S[K[j-1]],B=S[K[j]],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy);if(L<0.5)continue;const ow=EDGE1.get(seq[K[j-1]]+","+seq[K[j-1]+1]);const o=(ow===1)?0:off,ux=dx/L,uy=dy/L,nx=-uy*o,ny=ux*o;segs.push({a:[A[0]+nx,A[1]+ny],b:[B[0]+nx,B[1]+ny],ux,uy,L});}
         if(segs.length<2)return;
-        const back=Math.max(22,Math.min(60,24*k)),fw=back;
+        const back=Math.max(22,Math.min(60,24*k)),fw=Math.max(34,Math.min(80,30*k));
+        /* el tramo final puede estar partido en varios nodos: avanzar fw píxeles a lo largo de ellos */
         const f=segs[0],l=segs[segs.length-1];
-        const st=[f.b[0]-f.ux*Math.min(back,f.L),f.b[1]-f.uy*Math.min(back,f.L)];
-        const en=[l.a[0]+l.ux*Math.min(fw,l.L),l.a[1]+l.uy*Math.min(fw,l.L)];
+        const st=[f.b[0]-f.ux*back,f.b[1]-f.uy*back];
+        let en=[l.a[0]+l.ux*Math.min(fw,l.L),l.a[1]+l.uy*Math.min(fw,l.L)];
         /* esquinas: cruce de los segmentos desplazados consecutivos */
         const corners=[];for(let q=1;q<segs.length;q++){const s1=segs[q-1],s2=segs[q];const den=s1.ux*s2.uy-s1.uy*s2.ux;
           if(Math.abs(den)<0.08){corners.push([(s1.b[0]+s2.a[0])/2,(s1.b[1]+s2.a[1])/2]);continue;}
@@ -499,8 +552,18 @@ class MapView{
         c.strokeStyle=col;c.lineWidth=wd;c.setLineDash(dash?[7,6]:[]);c.stroke();c.setLineDash([]);
         const vx=l.ux,vy=l.uy,hs=wd>2?9:6;c.beginPath();c.moveTo(en[0]-vx*hs-vy*hs*.7,en[1]-vy*hs+vx*hs*.7);c.lineTo(en[0],en[1]);c.lineTo(en[0]-vx*hs+vy*hs*.7,en[1]-vy*hs-vx*hs*.7);c.stroke();};
       this._curve=curve;
-      if(this.focus){const app=this.focus;for(const e of app.ex){if(e.st!==0)curve(app,e,COL.no,true,Math.max(3,lw));}for(const e of app.ex){if(e.st===0)curve(app,e,COL.go,false,Math.max(3.4,lw+1));}
-        const u=P(app.u),n=P(app.n);if(u&&n){const U=this.toScreen(u[0],u[1]),Nn=this.toScreen(n[0],n[1]);c.beginPath();c.moveTo(U[0],U[1]);c.lineTo(Nn[0],Nn[1]);c.strokeStyle=COL.go;c.lineWidth=5;c.globalAlpha=.35;c.stroke();c.globalAlpha=1;}}
+      if(this.focus){const app=this.focus,run=this.focusRun||[{app,path:[app.u,app.n]}];
+        /* toda la calle en el sentido elegido, resaltada debajo */
+        c.beginPath();for(const r of run){let f=true;for(const q of r.path){const z=P(q);if(!z){f=true;continue;}const Z=this.toScreen(z[0],z[1]);if(f)c.moveTo(Z[0],Z[1]);else c.lineTo(Z[0],Z[1]);f=false;}}
+        c.strokeStyle=COL.go;c.lineWidth=Math.max(7,lw*2.4);c.globalAlpha=.28;c.stroke();c.globalAlpha=1;
+        const nm=app.name;const isCont=(r,e,j)=>j+1<run.length&&e.st===0&&(e.kind===0||(nm&&e.name===nm))&&run[j+1].path[0]===r.app.n&&e.p.every((q,ix)=>run[j+1].path[ix+1]===q);
+        /* resto de cruces: solo los giros (no la continuación), permitidos en verde y prohibidos por señal en rojo */
+        for(let j=1;j<run.length;j++){const r=run[j];const Z=P(r.app.n);if(!inV(Z))continue;
+          for(const e of r.app.ex){if(e.st>=2&&e.name)curve(r.app,e,COL.no,true,Math.max(2.4,lw-.5));}
+          for(const e of r.app.ex){if(e.st===0&&!isCont(r,e,j))curve(r.app,e,COL.go,false,Math.max(2.6,lw));}}
+        /* cruce pulsado: todo, más grueso */
+        for(const e of app.ex){if(e.st>=2&&showEx(e))curve(app,e,COL.no,true,Math.max(3,lw));}for(const e of app.ex){if(e.st===0)curve(app,e,COL.go,false,Math.max(3.4,lw+1));}
+        const Zf=P(app.n);if(Zf){const F=this.toScreen(Zf[0],Zf[1]);c.beginPath();c.arc(F[0],F[1],7,0,6.283);c.fillStyle=COL.go;c.fill();c.lineWidth=2;c.strokeStyle=COL.halo;c.stroke();}}
     }
     if(this.showDir&&k>=0.22&&!laneOn){const v0=this.toWorld(-20,this.H+20),v1=this.toWorld(this.W+20,-20),step=k>=0.6?90:120,sz=k>=0.6?5.5:4.5;
       c.strokeStyle=COL.arrow;c.lineWidth=2;c.lineCap="round";c.lineJoin="round";c.beginPath();
@@ -614,8 +677,8 @@ function renderSb(){const c=$("sb-card");if(inClaude()){c.style.display="none";r
   $("sb-msg").textContent=!conf?"El inicio de sesión todavía no está configurado. El progreso se guarda solo en este dispositivo.":sbUser?("Has entrado como "+(sbUser.email||"tu cuenta")+". "+sbMsg):(sbMsg||"Entra con tu cuenta de Google para seguir en cualquier dispositivo donde lo dejaste.");}
 function loadScript(src){return new Promise((res,rej)=>{const e=document.createElement("script");e.src=src;e.onload=res;e.onerror=rej;document.head.appendChild(e);});}
 function persistAll(){for(const ch of allChunks()){lsSet(ch,chunkCards(ch));dirty.add(ch);}lsSet("meta",ST.meta);metaDirty=true;}
-function localNewer(o){if(!o||!o.cards)return true;for(const k in ST.cards){const r=o.cards[k];if(!r||(r[5]||0)<(ST.cards[k][5]||0))return true;}return(ST.meta.ts||0)>((o.meta&&o.meta.ts)||0);}
-function mergeBlob(o){let ch=false;if(!o||!o.cards)return false;for(const k in o.cards){const r=o.cards[k],l=ST.cards[k];if(Array.isArray(r)&&(!l||(r[5]||0)>(l[5]||0))){ST.cards[k]=r;ch=true;}}
+function localNewer(o){if(!o||!o.cards)return true;{const rr=o.rep||{list:[],del:[]},ids=new Set(rr.list.map(r=>r.id)),dd=new Set(rr.del);if(REP.list.some(r=>!ids.has(r.id))||REP.del.some(x=>!dd.has(x)))return true;}for(const k in ST.cards){const r=o.cards[k];if(!r||(r[5]||0)<(ST.cards[k][5]||0))return true;}return(ST.meta.ts||0)>((o.meta&&o.meta.ts)||0);}
+function mergeBlob(o){let ch=false;if(!o||!o.cards)return false;if(o.rep){const ids=new Set(REP.list.map(r=>r.id));for(const r of o.rep.list||[])if(!ids.has(r.id)){REP.list.push(r);ch=true;}const dd=new Set(REP.del);for(const x of o.rep.del||[])if(!dd.has(x)){REP.del.push(x);ch=true;}lsSet("reports",REP);}for(const k in o.cards){const r=o.cards[k],l=ST.cards[k];if(Array.isArray(r)&&(!l||(r[5]||0)>(l[5]||0))){ST.cards[k]=r;ch=true;}}
   if(o.meta&&(o.meta.ts||0)>(ST.meta.ts||0)){Object.assign(ST.meta,o.meta);ch=true;}return ch;}
 /* acceso obligatorio: sin sesión no se usa la app (salvo en el enlace de Claude). Si ya se entró en este dispositivo, funciona sin conexión. */
 const gateOn=()=>!inClaude()&&!!(SUPA.url&&SUPA.key);
@@ -719,7 +782,7 @@ $("pr-go").onclick=()=>{const keys=shuffle(prPool()).slice(0,PR.n);if(!keys.leng
 function finish(){
   if(session.practice){$("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
     const pc=Math.round(100*session.ok/Math.max(1,session.done));
-    $("panel").innerHTML='<div class="fb '+(pc>=80?"ok":pc>=50?"warn":"bad")+'">'+session.ok+" de "+session.done+" correctas ("+pc+' %).</div><button class="btn primary block" id="b-again">Otra ronda</button><button class="btn block" id="b-fin">Volver</button>';
+    $("panel").innerHTML='<div class="fb '+(pc>=80?"ok":pc>=50?"warn":"bad")+'">'+(session.half?(session.ok-session.half/2)+" bien, "+session.half+" medio bien y "+(session.done-session.ok-session.half/2)+" mal de "+session.done+" (nota "+pc:session.ok+" de "+session.done+" correctas ("+pc)+' %).</div><button class="btn primary block" id="b-again">Otra ronda</button><button class="btn block" id="b-fin">Volver</button>';
     mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;$("b-again").onclick=()=>{session=null;$("pr-go").onclick();};return;}
   $("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
   const due=countDue(),nb=newBudget();
@@ -729,7 +792,7 @@ function finish(){
 function exitStudy(){const pr=session&&session.practice;session=null;flush();refreshKnown();renderHome();show(pr?"prac":"home");if(sbUser)sbSync();}
 function grade(key,res,lr){
   mapS.showNames=true;mapS.draw(); /* res: 2 bien, 1 casi, 0 mal */
-  if(session.practice){session.done++;if(res===2)session.ok++;return;}
+  if(session.practice){session.done++;if(res===2)session.ok++;else if(res===1){session.ok+=0.5;session.half=(session.half||0)+1;}return;}
   const s=session,t=dayNum();let c=ST.cards[key];if(!c)c=ST.cards[key]=[t,0,230,0,0,0];
   s.done++;ST.meta.dRev++;
   if(c[3]===0){ // aprendizaje
@@ -779,7 +842,7 @@ function renderRoute(key){
   $("prompt").innerHTML='<div class="q">¿Se puede hacer este recorrido con un turismo no prioritario?</div><div class="placa" style="font-size:'+fs+'px;line-height:1.2;padding:4px 10px">'+st.map(s=>esc(s.n)).join('<br><span style="font-size:13px;opacity:.7">↓</span><br>')+"</div>";
   const b=[1e9,1e9,-1e9,-1e9];for(const s of st){b[0]=Math.min(b[0],s.c[0]);b[1]=Math.min(b[1],s.c[1]);b[2]=Math.max(b[2],s.c[0]);b[3]=Math.max(b[3],s.c[1]);}
   const m=900;mapS.fit([b[0]-m,b[1]-m,b[2]+m,b[3]+m],0);
-  options(["Correcto","Incorrecto: Dirección prohibida","Incorrecto: Giro prohibido","Incorrecto: Sin continuidad"],RTWHY[q.t],ok=>{
+  options(["Correcto","Incorrecto: Dirección prohibida","Incorrecto: Giro prohibido","Incorrecto: Sin continuidad"],RTWHY[q.t],(ok,half)=>{
     const C=RTCOL();mapS.hl=st.map((s,j)=>({s,color:C[j],w:3}));mapS.labels=st.map(s=>({s,force:true}));
     if(q.p){mapS.route={P:polyPath(q.p),color:q.t==="ok"?COL.accent:COL.bad||"#c22a2a",dash:q.t!=="ok"};}
     if(q.m)mapS.pins=[{x:q.m[0],y:q.m[1],color:"#c22a2a",label:q.t==="giro"?"Giro prohibido":"Contra dirección"}];
@@ -789,7 +852,7 @@ function renderRoute(key){
     const why=q.t==="ok"?"Correcto, se enlazan "+st.map(s=>s.n).join(" → ")+".":q.t==="sentido"?"Para enlazarlas habría que circular por "+A_.n+" en sentido contrario.":q.t==="giro"?"Desde "+A_.n+" está prohibido "+(RTK[q.k]||"ese giro")+" hacia "+B_.n+".":A_.n+" y "+B_.n+" no se cruzan ni enlazan por una glorieta o plaza cercana.";
     $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(why)+"</div>");
     const f=lsGet("rtf")||{};if(ok)delete f[i];else f[i]=1;lsSet("rtf",f);
-    grade(key,ok?2:0,null);});
+    grade(key,ok?2:half?1:0,null);},t=>q.t!=="ok"&&t!=="Correcto");
 }
 function renderCard(p){
   if(p.key[0]==="r"){renderRoute(p.key);return;}
@@ -834,16 +897,42 @@ function renderCard(p){
       const msg=res===2?(d<1?"Correcto.":"Correcto, a "+fmtD(d)+"."):res===1?"Casi: te has quedado a "+fmtD(d)+".":"Fallo: estaba a "+fmtD(d)+".";
       $("panel").innerHTML='<div class="fb '+(res===2?"ok":res===1?"warn":"bad")+'">'+msg+'</div><button class="btn primary block" id="b-next">Siguiente</button>';
       $("b-next").onclick=nextCard;$("st-left").textContent="Quedan "+remaining();
+      const ll=toLL(pin[0],pin[1]);addReportUI({app:msg+" (posición de la app: "+o.n+")",user:"punto marcado en "+ll[0].toFixed(5)+", "+ll[1].toFixed(5)});
     };
   }
 }
-function options(list,right,cb){
+/* ---------- errores de corrección reportados por el usuario ---------- */
+let REP=lsGet("reports")||{list:[],del:[]};
+function saveRep(){lsSet("reports",REP);syncDirty=true;}
+function repVisible(){const d=new Set(REP.del);return REP.list.filter(r=>!d.has(r.id)).sort((a,b)=>b.id-a.id);}
+function addReportUI(info){const pn=$("panel");const btn=document.createElement("button");btn.className="rep-link";btn.textContent="⚑ Hay un error en la corrección";
+  btn.onclick=()=>{const box=document.createElement("div");box.className="rep-box";
+    box.innerHTML='<label class="note" for="rep-txt">Escribe cuál es la respuesta correcta y por qué</label><textarea id="rep-txt" placeholder="Ej.: desde Diego de León sí se puede girar a la izquierda hacia Pardiñas; la señal ya no existe"></textarea><div class="row"><button class="btn small primary" id="rep-ok">Confirmar</button><button class="btn small" id="rep-cancel">Cancelar</button></div>';
+    btn.replaceWith(box);const ta=box.querySelector("textarea");ta.focus();
+    box.querySelector("#rep-cancel").onclick=()=>box.replaceWith(btn);
+    box.querySelector("#rep-ok").onclick=()=>{const fix=ta.value.trim();if(!fix){ta.focus();ta.placeholder="Escribe la corrección para poder guardarla";return;}
+      const r=Object.assign({id:Date.now(),t:new Date().toISOString(),modo:session&&session.practice?"Práctica":"Estudio",clave:session&&session.cur?session.cur.key:"",pregunta:$("prompt").innerText.replace(/\n+/g," · ").trim(),fix},info);
+      REP.list.push(r);saveRep();const ok=document.createElement("div");ok.className="fb ok";ok.textContent="Guardado. Lo tienes en Ajustes → Errores reportados.";box.replaceWith(ok);};};
+  const nx=pn.querySelector(".btn.primary");if(nx)pn.insertBefore(btn,nx);else pn.appendChild(btn);}
+function repText(){return repVisible().map((r,i)=>(i+1)+". ["+new Date(r.t).toLocaleString("es-ES")+"] "+r.modo+(r.clave?" ("+r.clave+")":"")+"\n   Pregunta: "+r.pregunta+"\n   Respuesta de la app: "+(r.app||"-")+"\n   Tu respuesta: "+(r.user||"-")+"\n   Corrección: "+r.fix).join("\n\n");}
+function renderRep(){const L=repVisible();$("rep-sum").textContent=L.length?L.length+(L.length===1?" error guardado.":" errores guardados.")+" Cópialos o descárgalos para enviármelos.":"No has reportado ningún error. Cuando la app corrija algo mal, pulsa «Hay un error en la corrección» debajo de la respuesta.";
+  const box=$("rep-list");box.innerHTML="";for(const r of L){const it=document.createElement("div");it.className="rep-item";
+    it.innerHTML='<span class="meta">'+esc(new Date(r.t).toLocaleString("es-ES"))+" · "+esc(r.modo)+'</span><span>'+esc(r.pregunta)+'</span><span><b>App:</b> '+esc(r.app||"-")+(r.user?" · <b>Tú:</b> "+esc(r.user):"")+'</span><span><b>Corrección:</b> '+esc(r.fix)+'</span>';
+    const del=document.createElement("button");del.className="rep-link";del.textContent="Borrar";del.onclick=()=>{REP.del.push(r.id);saveRep();renderRep();};it.appendChild(del);box.appendChild(it);}
+  $("rep-copy").disabled=$("rep-dl").disabled=!L.length;}
+$("rep-copy").onclick=async()=>{const t=repText();try{await navigator.clipboard.writeText(t);$("rep-msg").textContent="Copiados. Pégalos en el chat con Claude.";}catch(e){const ta=$("t-io");ta.style.display="block";ta.value=t;ta.select();$("rep-msg").textContent="No se ha podido copiar automáticamente: el texto está en el recuadro de «Tu progreso», cópialo desde ahí.";}};
+$("rep-dl").onclick=async()=>{const t=repText(),name="errores-callejero-"+new Date().toISOString().slice(0,10)+".txt";
+  try{const dl=inClaude()?await window.claude.use("downloads"):null;if(dl){await dl.save({filename:name,data:t});$("rep-msg").textContent="Descargado.";return;}}catch(e){if(e&&e.code==="declined"){$("rep-msg").textContent="No se ha descargado.";return;}}
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/plain"}));a.download=name;document.body.appendChild(a);a.click();a.remove();$("rep-msg").textContent="Descargado: "+name;};
+function options(list,right,cb,isHalf){
   const pn=$("panel");pn.innerHTML="";
   list.forEach((t,ix)=>{const b=document.createElement("button");b.className="opt";b.textContent=t;b.dataset.k=ix+1;
-    b.onclick=()=>{if(session.answered)return;session.answered=true;const ok=t===right;
-      [...pn.querySelectorAll(".opt")].forEach(x=>{if(x.textContent===right)x.classList.add("good");else if(x===b)x.classList.add("wrong");x.disabled=true;});
-      cb(ok);$("st-left").textContent="Quedan "+remaining();
+    b.onclick=()=>{if(session.answered)return;session.answered=true;const ok=t===right,half=!ok&&!!(isHalf&&isHalf(t));
+      [...pn.querySelectorAll(".opt")].forEach(x=>{if(x.textContent===right)x.classList.add("good");else if(x===b)x.classList.add(half?"half":"wrong");x.disabled=true;});
+      if(half){const fb=document.createElement("div");fb.className="fb warn";fb.textContent="Medio bien: el recorrido sí es incorrecto, pero por otro motivo.";pn.appendChild(fb);}
+      cb(ok,half);$("st-left").textContent="Quedan "+remaining();
       const nx=document.createElement("button");nx.className="btn primary block";nx.textContent="Siguiente";nx.onclick=nextCard;pn.appendChild(nx);
+      addReportUI({app:right,user:t});
     };pn.appendChild(b);});
 }
 
@@ -874,7 +963,7 @@ function show(v){for(const s of document.querySelectorAll(".view"))s.classList.t
   $("tabs").style.display=v==="study"?"none":"";for(const b of document.querySelectorAll("#tabs button"))b.classList.toggle("on",b.dataset.v===v);
   if(v==="map"){mapE.resize();if(!mapE.inited){mapE.inited=true;mapE.fit(CITY,0);}}
   if(v==="study")mapS.resize();
-  if(v==="home")renderHome();if(v==="prac")renderPrac();if(v==="set"){renderHome();renderSync();renderSb();}}
+  if(v==="home")renderHome();if(v==="prac")renderPrac();if(v==="set"){renderHome();renderSync();renderSb();renderRep();}}
 for(const b of document.querySelectorAll("#tabs button"))b.onclick=()=>show(b.dataset.v);
 for(const b of document.querySelectorAll(".zoom button"))b.onclick=()=>{(b.closest("#v-study")?mapS:mapE).zoom(parseFloat(b.dataset.z));};
 $("b-study").onclick=startSession;$("b-exit").onclick=exitStudy;
@@ -900,9 +989,9 @@ $("q").addEventListener("input",()=>{const v=norm($("q").value.trim()),r=$("resu
 const chip=(id,prop)=>{$(id).onclick=()=>{mapE[prop]=!mapE[prop];if(prop==="showKnown"&&mapE.tc)mapE.tc.clear();$(id).classList.toggle("on",mapE[prop]);mapE.draw();};};
 
 /* ---------- backup ---------- */
-function exportData(){return JSON.stringify({app:"callejero-bomberos-madrid",v:1,meta:ST.meta,cards:ST.cards});}
+function exportData(){return JSON.stringify({app:"callejero-bomberos-madrid",v:1,meta:ST.meta,cards:ST.cards,rep:REP});}
 function importData(txt){const o=JSON.parse(txt);if(!o||o.app!=="callejero-bomberos-madrid"||!o.cards)throw new Error("formato");
-  ST.cards=o.cards;Object.assign(ST.meta,o.meta||{});const t=nowMin();for(const k in ST.cards)ST.cards[k][5]=t;
+  ST.cards=o.cards;Object.assign(ST.meta,o.meta||{});if(o.rep){REP=o.rep;lsSet("reports",REP);}const t=nowMin();for(const k in ST.cards)ST.cards[k][5]=t;
   for(const ch of allChunks()){lsSet(ch,chunkCards(ch));dirty.add(ch);}touchMeta();refreshKnown();renderHome();}
 $("b-exp").onclick=async()=>{const data=exportData(),msg=$("io-msg");
   try{const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
@@ -958,15 +1047,19 @@ function laneTap(x,y){if(!mapE.showLanes||mapE.k<0.45||!mapE.laneTiles)return fa
   if(!best)return false;
   const L=best.w[2];let path=best.fwd?L.slice(best.q-1):L.slice(0,best.q+1).reverse();
   let app=null;for(let q=1;q<path.length&&!app;q++)app=getApp(path[q-1]+","+path[q]);
-  if(!app){mapE.focus=null;mapE.draw();return false;}
-  if(mapE.focus===app){mapE.focus=null;mapE.draw();$("info").style.display="none";return true;}
-  mapE.hl=[];mapE.labels=[];mapE.focus=app;mapE.draw();
-  const ok=app.ex.filter(e=>e.st===0),no=app.ex.filter(e=>e.st!==0);
-  const fmt=e=>KINDTXT[e.kind]+(e.name&&e.name!==app.name?" a "+e.name:e.kind===0?" por "+(e.name||app.name):e.name?"":" (vía sin nombre)")+(e.lab?" ("+e.lab+")":"");
-  const e=$("info");e.style.display="block";
-  e.innerHTML=esc("Llegando por "+(app.name||"esta vía"))+"<small>"+(ok.length?"<span style='color:var(--go)'>✓ Puedes "+esc(ok.map(fmt).join(" · "))+"</span>":"")+(no.length?"<br><span style='color:var(--no)'>✗ No puedes "+esc(no.map(e=>fmt(e)+" ("+STTXT[e.st]+")").join(" · "))+"</span>":"")+"</small>";
+  if(!app){mapE.focus=null;mapE.focusRun=null;mapE.draw();return false;}
+  if(mapE.focus===app){mapE.focus=null;mapE.focusRun=null;mapE.draw();$("info").style.display="none";return true;}
+  const run=streetRun(app);mapE.hl=[];mapE.labels=[];mapE.focus=app;mapE.focusRun=run;mapE.draw();
+  const fmt=(a,e)=>KINDTXT[e.kind]+(e.name&&e.name!==a.name?" a "+e.name:e.kind===0?" por "+(e.name||a.name):e.name?"":" (vía sin nombre)")+(e.lab?" ("+e.lab+")":"");
+  const box=$("info");box.style.display="block";
+  const ok=app.ex.filter(e=>e.st===0),no=app.ex.filter(e=>e.st!==0&&showEx(e));
+  let h=esc("Llegando por "+(app.name||"esta vía"))+"<small>"+(ok.length?"<span style='color:var(--go)'>✓ Puedes "+esc(ok.map(e=>fmt(app,e)).join(" · "))+"</span>":"")+(no.length?"<br><span style='color:var(--no)'>✗ No puedes "+esc(no.map(e=>fmt(app,e)+" ("+STTXT[e.st]+")").join(" · "))+"</span>":"")+"</small>";
+  const rows=[];for(let j=1;j<run.length;j++){const a=run[j].app;const tg=a.ex.filter(e=>e.kind!==0&&e.name&&e.name!==app.name&&(e.st===0||e.st>=2));if(!tg.length)continue;
+    rows.push('<button class="ln-row" data-n="'+a.n+'">'+tg.map(e=>(e.st===0?'<span style="color:var(--go)">✓ ':'<span style="color:var(--no)">✗ ')+esc((e.kind===1?"izq. ":e.kind===2?"der. ":"cambio de sentido ")+"a "+e.name)+"</span>").join(" · ")+"</button>");}
+  if(rows.length)h+='<div class="ln-list"><div class="ln-h">Más adelante por esta calle ('+rows.length+(rows.length===1?" cruce":" cruces")+'):</div>'+rows.join("")+"</div>";
+  box.innerHTML=h;box.querySelectorAll(".ln-row").forEach(b=>b.onclick=ev=>{ev.stopPropagation();const z=NODE.get(+b.dataset.n);if(z){mapE.cx=z[0];mapE.cy=z[1];if(mapE.k<0.9)mapE.k=0.9;mapE.draw();}});
   return true;}
-mapE.onTap=(x,y)=>{if(laneTap(x,y))return;mapE.focus=null;if(mapE.showSig&&mapE.sgVis&&mapE.sgVis.length){const p=mapE.toScreen(x,y);let bg=null,bd=13*13;for(const v of mapE.sgVis){const d=(v[0]-p[0])**2+(v[1]-p[1])**2;if(d<bd){bd=d;bg=v[2];}}
+mapE.onTap=(x,y)=>{if(laneTap(x,y))return;mapE.focus=null;mapE.focusRun=null;if(mapE.showSig&&mapE.sgVis&&mapE.sgVis.length){const p=mapE.toScreen(x,y);let bg=null,bd=13*13;for(const v of mapE.sgVis){const d=(v[0]-p[0])**2+(v[1]-p[1])**2;if(d<bd){bd=d;bg=v[2];}}
     if(bg){const cl=bg[4]&&!bg[4].startsWith("(")?bg[4].split(",").map(t=>t.trim()):null;info(SGTXT[bg[2]],(cl?"Señal en "+[cl[1],cl[2],cl[0]].filter(Boolean).join(" ").toLowerCase().replace(/(^|\s)\S/g,t=>t.toUpperCase()).replace(/ (De|Del|La|Las|Los|El|Y)(?= )/g,t=>t.toLowerCase())+" · ":"")+SGST[bg[3]]);return;}}
   if(mapE.showDir&&mapE.rsVis&&mapE.rsVis.length){const p=mapE.toScreen(x,y);let br=null,bd=14*14;for(const v of mapE.rsVis){const d=(v[0]-p[0])**2+(v[1]-p[1])**2;if(d<bd){bd=d;br=v[2];}}
     if(br){const f=byKey["s"+br[5]],t=byKey["s"+br[6]];info((f?"Desde "+f.n:"Desde esta vía")+": "+RTXT[br[2]]+(t&&br[2]!==4?" hacia "+t.n:""),[br[7]?"Excepto autobuses (EMT)":"",br[8]?"Según señal del inventario del Ayuntamiento":"Según OpenStreetMap"].filter(Boolean).join(" · "));return;}}
