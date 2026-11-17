@@ -381,7 +381,7 @@ class MapView{
     c.setTransform(d,0,0,d,0,0);
     for(const h of this.hl){const b=h.s.b,span=Math.max(b[2]-b[0],b[3]-b[1])*k;if(span<14){const p=this.toScreen(h.s.c[0],h.s.c[1]);c.beginPath();c.arc(p[0],p[1],18,0,6.283);c.strokeStyle=h.color;c.lineWidth=2.5;c.stroke();}}
     const laneOn=this.showLanes&&k>=0.45;
-    if(laneOn){const v0=this.toWorld(-40,this.H+40),v1=this.toWorld(this.W+40,-40),off=Math.min(6,Math.max(3,k*5));
+    if(laneOn){const v0=this.toWorld(-40,this.H+40),v1=this.toWorld(this.W+40,-40),off=Math.min(16,Math.max(4,k*7)),lw=Math.min(6,Math.max(2,1+k*2.2));
       const P=(n)=>NODE.get(n);
       const tl=[];for(let i=Math.floor(v0[0]/8000);i<=Math.floor(v1[0]/8000);i++)for(let j=Math.floor(v0[1]/8000);j<=Math.floor(v1[1]/8000);j++){const d=lTile(i,j,()=>this.draw());if(d)tl.push(d);}
       this.laneTiles=tl;
@@ -394,8 +394,8 @@ class MapView{
       for(const d of tl)for(const w of d.w){const L=w[2];let vis=false;for(const q of L){if(inV(P(q))){vis=true;break;}}if(!vis)continue;
         if(w[0]===1){let acc=55;for(let q=1;q<L.length;q++){const a=P(L[q-1]),b=P(L[q]);if(a&&b)acc=seg(a,b,0,acc);}}
         else{let acc=55;for(let q=1;q<L.length;q++){const a=P(L[q-1]),b=P(L[q]);if(a&&b)acc=seg(a,b,off,acc);}acc=55;for(let q=L.length-1;q>0;q--){const a=P(L[q]),b=P(L[q-1]);if(a&&b)acc=seg(a,b,off,acc);}}}
-      c.strokeStyle=COL.lane;c.lineWidth=2;c.stroke();
-      c.beginPath();for(const [x,y,ux,uy] of this._arr){const s=5;c.moveTo(x-ux*s-uy*s,y-uy*s+ux*s);c.lineTo(x,y);c.lineTo(x-ux*s+uy*s,y-uy*s-ux*s);}c.lineWidth=2.2;c.stroke();
+      c.strokeStyle=COL.lane;c.lineWidth=lw;c.stroke();
+      c.beginPath();for(const [x,y,ux,uy] of this._arr){const s=3+lw*1.4;c.moveTo(x-ux*s-uy*s,y-uy*s+ux*s);c.lineTo(x,y);c.lineTo(x-ux*s+uy*s,y-uy*s-ux*s);}c.lineWidth=Math.max(2.2,lw*.8);c.stroke();
       /* curvas de giro permitidas */
       const curve=(app,e,col,dash,wd)=>{const u=P(app.u),n=P(app.n);if(!u||!n)return;const pts=[n];for(const q of e.p){const z=P(q);if(!z)return;pts.push(z);}
         const S=pts.map(p=>this.toScreen(p[0],p[1])),U=this.toScreen(u[0],u[1]);
@@ -409,8 +409,7 @@ class MapView{
         c.strokeStyle=col;c.lineWidth=wd;c.setLineDash(dash?[6,5]:[]);c.stroke();c.setLineDash([]);
         c.beginPath();const hx=en[0]-vx*0,hy=en[1];const hs=wd>2?8:6;c.moveTo(en[0]-vx*hs-vy*hs*.7,en[1]-vy*hs+vx*hs*.7);c.lineTo(en[0],en[1]);c.lineTo(en[0]-vx*hs+vy*hs*.7,en[1]-vy*hs-vx*hs*.7);c.stroke();};
       this._curve=curve;
-      if(k>=0.7&&!this.focus){c.globalAlpha=.75;for(const d of tl)for(const a of d.a){const nn=P(a[1]);if(!inV(nn))continue;const app=APP.get(a[0]+","+a[1]);if(!app)continue;for(const e of app.ex){if(e.st===0&&e.kind!==0)curve(app,e,COL.lane,false,1.6);}}c.globalAlpha=1;}
-      if(this.focus){const app=this.focus;for(const e of app.ex){if(e.st!==0)curve(app,e,COL.no,true,3);}for(const e of app.ex){if(e.st===0)curve(app,e,COL.go,false,3.4);}
+      if(this.focus){const app=this.focus;for(const e of app.ex){if(e.st!==0)curve(app,e,COL.no,true,Math.max(3,lw));}for(const e of app.ex){if(e.st===0)curve(app,e,COL.go,false,Math.max(3.4,lw+1));}
         const u=P(app.u),n=P(app.n);if(u&&n){const U=this.toScreen(u[0],u[1]),Nn=this.toScreen(n[0],n[1]);c.beginPath();c.moveTo(U[0],U[1]);c.lineTo(Nn[0],Nn[1]);c.strokeStyle=COL.go;c.lineWidth=5;c.globalAlpha=.35;c.stroke();c.globalAlpha=1;}}
     }
     if(this.showDir&&k>=0.22&&!laneOn){const v0=this.toWorld(-20,this.H+20),v1=this.toWorld(this.W+20,-20),step=k>=0.6?90:120,sz=k>=0.6?5.5:4.5;
@@ -663,7 +662,7 @@ function renderIntro(o){
 }
 const RTCOL=()=>[COL.ok,COL.target,COL.pin];
 function polyPath(fl){const p=new Path2D();let x=0,y=0;for(let i=0;i<fl.length;i+=2){x+=fl[i];y+=fl[i+1];if(i)p.lineTo(x,-y);else p.moveTo(x,-y);}return p;}
-const RTWHY={ok:"Es posible",sentido:"No: dirección prohibida",giro:"No: giro prohibido",cont:"No: no tienen continuidad"};
+const RTWHY={ok:"Correcto",sentido:"Incorrecto: Dirección prohibida",giro:"Incorrecto: Giro prohibido",cont:"Incorrecto: Sin continuidad"};
 const RTK={no_left_turn:"girar a la izquierda",no_right_turn:"girar a la derecha",no_straight_on:"seguir recto"};
 function renderRoute(key){
   const i=+key.slice(1,-1),q=TR[i];if(!q){nextCard();return;}
@@ -672,7 +671,7 @@ function renderRoute(key){
   $("prompt").innerHTML='<div class="q">¿Se puede hacer este recorrido con un turismo no prioritario?</div><div class="placa" style="font-size:18px;line-height:1.2;padding:4px 10px">'+st.map(s=>esc(s.n)).join('<br><span style="font-size:14px;opacity:.7">↓</span><br>')+"</div>";
   const b=[1e9,1e9,-1e9,-1e9];for(const s of st){b[0]=Math.min(b[0],s.c[0]);b[1]=Math.min(b[1],s.c[1]);b[2]=Math.max(b[2],s.c[0]);b[3]=Math.max(b[3],s.c[1]);}
   const m=900;mapS.fit([b[0]-m,b[1]-m,b[2]+m,b[3]+m],0);
-  options(["Es posible","No: dirección prohibida","No: giro prohibido","No: no tienen continuidad"],RTWHY[q.t],ok=>{
+  options(["Correcto","Incorrecto: Dirección prohibida","Incorrecto: Giro prohibido","Incorrecto: Sin continuidad"],RTWHY[q.t],ok=>{
     const C=RTCOL();mapS.hl=st.map((s,j)=>({s,color:C[j],w:3}));mapS.labels=st.map(s=>({s,force:true}));
     if(q.p){mapS.route={P:polyPath(q.p),color:q.t==="ok"?COL.accent:COL.bad||"#c22a2a",dash:q.t!=="ok"};}
     if(q.m)mapS.pins=[{x:q.m[0],y:q.m[1],color:"#c22a2a",label:q.t==="giro"?"Giro prohibido":"Contra dirección"}];
@@ -816,7 +815,7 @@ $("b-reset").onclick=()=>{const b=$("b-reset");if(Date.now()-resetArm>4000){rese
 readColors();
 mapS=new MapView($("c-study"));mapE=new MapView($("c-map"));
 function laneTap(x,y){if(!mapE.showLanes||mapE.k<0.45||!mapE.laneTiles)return false;
-  const tol=14/mapE.k;let best=null,bd=tol;
+  const tol=24/mapE.k;let best=null,bd=tol;
   for(const d of mapE.laneTiles)for(const w of d.w){const L=w[2];for(let q=1;q<L.length;q++){const a=NODE.get(L[q-1]),b=NODE.get(L[q]);if(!a||!b)continue;
       const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;if(!l)continue;let t=((x-a[0])*dx+(y-a[1])*dy)/l;t=t<0?0:t>1?1:t;const ex=a[0]+t*dx-x,ey=a[1]+t*dy-y,dd=Math.hypot(ex,ey);
       if(dd<bd){bd=dd;const side=(dx*(y-a[1])-dy*(x-a[0]));best={w,q,fwd:w[0]===1?true:side<0};}}}
@@ -824,7 +823,8 @@ function laneTap(x,y){if(!mapE.showLanes||mapE.k<0.45||!mapE.laneTiles)return fa
   const L=best.w[2];let path=best.fwd?L.slice(best.q-1):L.slice(0,best.q+1).reverse();
   let app=null;for(let q=1;q<path.length&&!app;q++)app=APP.get(path[q-1]+","+path[q]);
   if(!app){mapE.focus=null;mapE.draw();return false;}
-  mapE.focus=app;mapE.draw();
+  if(mapE.focus===app){mapE.focus=null;mapE.draw();$("info").style.display="none";return true;}
+  mapE.hl=[];mapE.labels=[];mapE.focus=app;mapE.draw();
   const ok=app.ex.filter(e=>e.st===0),no=app.ex.filter(e=>e.st!==0);
   const fmt=e=>KINDTXT[e.kind]+(e.name&&e.name!==app.name?" a "+e.name:e.kind===0?" por "+(e.name||app.name):"");
   const e=$("info");e.style.display="block";
@@ -834,8 +834,8 @@ mapE.onTap=(x,y)=>{if(laneTap(x,y))return;mapE.focus=null;if(mapE.showSig&&mapE.
     if(bg){const cl=bg[4]&&!bg[4].startsWith("(")?bg[4].split(",").map(t=>t.trim()):null;info(SGTXT[bg[2]],(cl?"Señal en "+[cl[1],cl[2],cl[0]].filter(Boolean).join(" ").toLowerCase().replace(/(^|\s)\S/g,t=>t.toUpperCase()).replace(/ (De|Del|La|Las|Los|El|Y)(?= )/g,t=>t.toLowerCase())+" · ":"")+SGST[bg[3]]);return;}}
   if(mapE.showDir&&mapE.rsVis&&mapE.rsVis.length){const p=mapE.toScreen(x,y);let br=null,bd=14*14;for(const v of mapE.rsVis){const d=(v[0]-p[0])**2+(v[1]-p[1])**2;if(d<bd){bd=d;br=v[2];}}
     if(br){const f=byKey["s"+br[5]],t=byKey["s"+br[6]];info((f?"Desde "+f.n:"Desde esta vía")+": "+RTXT[br[2]]+(t&&br[2]!==4?" hacia "+t.n:""),[br[7]?"Excepto autobuses (EMT)":"",br[8]?"Según señal del inventario del Ayuntamiento":"Según OpenStreetMap"].filter(Boolean).join(" · "));return;}}
-  if(mapE.showHitos){let bh=null,bd=(16/mapE.k)**2;for(const h of H){const d=d2([x,y],h.c);if(d<bd){bd=d;bh=h;}}if(bh){selectExplore(bh);return;}}
-  const s=streetAt(x,y,Math.max(15,10/mapE.k));if(s){mapE.hl=[{s,color:COL.target}];mapE.pins=[];mapE.labels=[{s,force:true,near:[x,y]}];mapE.draw();info(s.n,OWTXT[s.ow||0]+" · "+zoneName(s));}};
+  if(mapE.showHitos){let bh=null,bd=(16/mapE.k)**2;for(const h of H){const d=d2([x,y],h.c);if(d<bd){bd=d;bh=h;}}if(bh){if(mapE.pins.length&&mapE.pins[0].label===bh.n){mapE.pins=[];mapE.draw();$("info").style.display="none";return;}selectExplore(bh);return;}}
+  const s=streetAt(x,y,Math.max(15,10/mapE.k));if(s&&mapE.hl.length&&mapE.hl[0].s===s){mapE.hl=[];mapE.labels=[];mapE.draw();$("info").style.display="none";return;}if(!s){mapE.hl=[];mapE.labels=[];mapE.draw();$("info").style.display="none";return;}if(s){mapE.hl=[{s,color:COL.target}];mapE.pins=[];mapE.labels=[{s,force:true,near:[x,y]}];mapE.draw();info(s.n,OWTXT[s.ow||0]+" · "+zoneName(s));}};
 mapE.showNames=true;chip("ch-names","showNames");mapE.showLanes=true;chip("ch-lane","showLanes");chip("ch-dir","showDir");chip("ch-sig","showSig");chip("ch-hitos","showHitos");chip("ch-known","showKnown");
 const mq=window.matchMedia("(prefers-color-scheme: dark)");const recolor=()=>{readColors();mapS.draw();mapE.draw();};
 if(mq.addEventListener)mq.addEventListener("change",recolor);new MutationObserver(recolor).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
