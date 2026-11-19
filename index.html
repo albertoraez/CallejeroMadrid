@@ -1023,7 +1023,7 @@ function prPool(){const out=[];for(const o of [...S,...H]){if(!prIn(o))continue;
       out.push(o.key+c);}}}
   if(PR.types.includes("rt")){const fails=lsGet("rtf")||{};TR.forEach((q,i)=>{if(!q||!PR.rlen.includes(q.s.length))return;const B=byKey["s"+q.s[Math.min(1,q.s.length-1)]];if(!B||!prIn(B))return;
     if(PR.seen&&!q.s.every(id=>introduced(byKey["s"+id])))return;if(PR.fails&&!fails[i])return;out.push("r"+i+"t");});}
-  if(PR.types.includes("rt")&&PR.rlen.some(v=>String(v).startsWith("ex"))){const fx=lsGet("exf")||{};EX.forEach((q,i)=>{if(!PR.rlen.includes(exBand(q)))return;const A=q.at==="s"?S.find(x=>x.n===q.a):H.find(h=>h.n===q.a);if(A&&!prIn(A))return;if(PR.fails&&!fx[i])return;out.push("e"+i+"e");});}
+  if(PR.types.includes("rt")&&PR.rlen.some(v=>String(v).startsWith("ex"))){const fx=lsGet("exf2")||{};EX.forEach((q,i)=>{if(!PR.rlen.includes(exBand(q)))return;const A=q.at==="s"?S.find(x=>x.n===q.a):H.find(h=>h.n===q.a);if(A&&!prIn(A))return;if(PR.fails&&!fx[i])return;out.push("e"+i+"e");});}
   return out;}
 function renderPrac(){if(!EX.length&&PR.rlen.some(v=>String(v).startsWith("ex")))loadEX();
   const mk=(box,list,isOn,toggle)=>{const e=$(box);e.innerHTML="";list.forEach(([v,l])=>{const b=document.createElement("button");b.className="chip"+(isOn(v)?" on":"");b.textContent=l;b.onclick=()=>{toggle(v);lsSet("prac",PR);renderPrac();};e.appendChild(b);});};
@@ -1245,7 +1245,7 @@ function renderExam(key){
     const res=document.createElement("div");res.innerHTML='<div class="fb '+(ok?"ok":"bad")+'">'+(ok?"✓ Correcto":"✗ La buena era la "+"ABC"[q.c])+(session.hint&&ok?" (con pista: cuenta como casi)":"")+'</div><div class="seg2 exv">'+q.o.map((_,j)=>'<button data-j="'+j+'">Ver '+"ABC"[j]+'</button>').join("")+'</div><div class="exsteps note">Calculando el recorrido…</div>';
     pn.appendChild(res);
     const nx=document.createElement("button");nx.className="btn primary block";nx.textContent="Siguiente";nx.onclick=nextCard;pn.appendChild(nx);
-    const f=lsGet("exf")||{};if(ok)delete f[i];else f[i]=1;lsSet("exf",f);
+    const f=lsGet("exf2")||{};if(ok)delete f[i];else f[i]=1;lsSet("exf2",f);
     grade(key,ok?(session.hint?1:2):0,null);$("st-left").textContent="Quedan "+remaining();
     const cache={};const view=async j=>{res.querySelectorAll(".exv button").forEach(b=>b.classList.toggle("on",+b.dataset.j===j));
       const its=exItems(q,q.o[j]);if(!cache[j]){await ensureTiles(itemsBox(its));cache[j]=await checkRoute(its,false);}
@@ -1430,7 +1430,7 @@ function routeSearch(items,opt){
     /* enlaces permitidos entre dos elementos: vías sin nombre, glorietas, plazas, puentes o túneles, hasta 350 m (como en las preguntas) */
     const mw=it=>it&&/^(Autovía|Autopista)\b|^Carretera [AMR]-\d/.test(it.n||"");
     const lk=ELINK.has(x+","+y)&&(mw(items[stage])||mw(items[stage+1]));
-    const nm=ENM.get(x+","+y)||"";if(nm&&!lk&&!/^(Glorieta|Plaza|Plazuela|Puente|Túnel|Paso|Rotonda|Puerta|Enlace|Nudo|Ramal)\b/.test(nm)&&!(PADJ.get(x)||[]).includes(y))return null;
+    const nm=ENM.get(x+","+y)||"";if(nm&&!lk&&eLen(x,y)>=25&&!/^(Glorieta|Plaza|Plazuela|Puente|Túnel|Paso|Rotonda|Puerta|Enlace|Nudo|Ramal)\b/.test(nm)&&!(PADJ.get(x)||[]).includes(y))return null;
     /* los ramales de enlace de autovías no cuentan para el límite: son largos pero son la unión natural */
     const c=conn+(lk?0:eLen(x,y));return c>350?null:[stage,c];};
   /* inicio: cualquier tramo del primer elemento, en un sentido válido */
@@ -1444,7 +1444,9 @@ function routeSearch(items,opt){
     if(stage===n-1){goal=k;break;}
     if(cost>90000)break;
     const moves=[];const app=getApp(a+","+b);
-    if(app){for(const e of app.ex.concat(app.rx)){if(!opt.st.has(e.st))continue;const seq=[b,...e.p];const mv=[];for(let q=1;q<seq.length;q++)mv.push([seq[q-1],seq[q],e.st]);moves.push([mv,pen[e.st]||0]);}}
+    /* un giro prohibido que atraviesa dos nodos muy juntos no se puede hacer "por partes" */
+    let bx=null;{const pp=par.get(k);if(pp){const mv0=pp[1];let x=null;if(mv0.length>=2)x=mv0[mv0.length-2][0];else if(pp[0])x=+pp[0].split(",")[0];if(x!=null){const a0=getApp(x+","+a);if(a0)for(const e of a0.ex)if((e.st===2||e.st===3)&&e.p.length>=2&&e.p[0]===b){(bx||(bx=new Map())).set(e.p[1],e.st);}}}}
+    if(app){for(const e0 of app.ex.concat(app.rx)){const e=bx&&bx.has(e0.p[0])&&(e0.st===0||e0.st===4||e0.st===5)?{p:e0.p,st:bx.get(e0.p[0])}:e0;if(!opt.st.has(e.st))continue;const seq=[b,...e.p];const mv=[];for(let q=1;q<seq.length;q++)mv.push([seq[q-1],seq[q],e.st]);moves.push([mv,pen[e.st]||0]);}}
     else{for(const [c] of ADJ.get(b)||[])if(c!==a)moves.push([[[b,c,0]],0]);}
     if(opt.rev)for(const [c] of PRED.get(b)||[]){if(c===a)continue;if((ADJ.get(b)||[]).some(x=>x[0]===c))continue;moves.push([[[b,c,"rev"]],pen.rev||0]);}
     if(opt.ped)for(const c of PADJ.get(b)||[])if(c!==a)moves.push([[[b,c,"ped"]],0]);
