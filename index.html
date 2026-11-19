@@ -464,6 +464,11 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
         <h2>Criterio del examen</h2>
         <p class="note">Turismo de 1,90 m, no prioritario y sin restricciones medioambientales. Un recorrido es incorrecto si pasa por dirección prohibida, hace un giro indebido o no es continuo. Si los tres son válidos, gana el más corto.</p>
       </div>
+      <div class="card about">
+        <h2>Acerca de</h2>
+        <p class="note"><b>Callejero Bomberos Madrid</b> · versión <span id="app-ver"></span></p>
+        <p class="note">App desarrollada por Alberto Ráez Rodríguez.</p>
+      </div>
     </div>
   </section>
 
@@ -871,6 +876,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
+const APPVER="0.64";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1309,19 +1315,21 @@ function renderConn(p){
     else{const ds=cnNear(c.x,c.y,okN.concat([V.n]),3),sim=simTo(B.n,S,okN.concat([V.n])).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
       options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
     return;}
-  /* vía -> vía: dos formas de pregunta */
-  const right=c.s===0?CNOPT[[2,0,1][c.k]]:CNOPT[3];
-  const which=c.k===4||(lvl===1&&c.s===0&&(useWrite(key,p)||((cc&&cc[3])+c.i)%2===0));
-  if(which){
-    const lk=cnLinked(c.a);lk.delete(B.n);
-    $("prompt").innerHTML='<div class="q">¿A qué vía llegas? '+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+(c.k===4?(lvl===2?" y tomas una salida. ¿A cuál de estas vías puedes salir por un enlace?":" y tomas la salida marcada."):" y en el cruce marcado quieres <b>"+KTX[c.k]+"</b>.")+"</div>";
-    mapS.extraDraw=(cx)=>{cnArrow(cx,approach,COL.accent||"#2563eb",4);cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
-    if(useWrite(key,p)&&!(c.k===4&&lvl===2))writeQ(B.n,v=>{let m=gradeWritten(v,B,"s");for(const n of alB){const o=S.find(x=>x.n===n);if(o){const r=gradeWritten(v,o,"s");if(r.r>m.r)m=r;}}return m;},r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
-    else{const ex=[A.n,B.n,...lk,...alA,...alB],ds=cnNear(c.x,c.y,ex,3),sim=simTo(B.n,S,ex).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
-      options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
+  /* vía -> vía. Nivel 1: «¿qué flecha te lleva a B?» (una letra por cada giro posible) o «¿se puede…?» con mapa. Nivel 2: «¿se puede…?» sin mapa */
+  const letters=lvl===1&&c.s===0&&c.al&&c.al.length>=2&&((((cc&&cc[3])||0)+c.i)%2===0||session.practice&&Math.random()<.5);
+  const LT="ABCDEF",ALC=["#7c3aed","#db2777","#0891b2","#ca8a04","#4b5563","#059669"];
+  if(letters){
+    $("prompt").innerHTML='<div class="q">¿Qué flecha te lleva a '+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b> en el sentido de la flecha azul. Cada letra es un giro que puedes hacer en este cruce.</div>";
+    const tip=pl=>{const e=pl[pl.length-1],q=pl[pl.length-2]||[c.x,c.y],dx=e[0]-q[0],dy=e[1]-q[1],l=Math.hypot(dx,dy)||1;return [e[0]+dx/l*14,e[1]+dy/l*14];};
+    const apL=(()=>{if(approach.length>2)return approach;const f=approach[0],dx=c.x-f[0],dy=c.y-f[1],l=Math.hypot(dx,dy)||1,m=Math.min(l,40);return [[c.x-dx/l*m,c.y-dy/l*m],[c.x,c.y]];})();
+    const drawAlts=hi=>cx=>{cnArrow(cx,apL,COL.accent||"#2563eb",4);c.al.forEach((pl,j)=>{const col=hi==null?ALC[j%ALC.length]:(j===hi?(COL.ok||"#16a34a"):"#9ca3af");cnArrow(cx,[[c.x,c.y]].concat(pl.slice(1)),col,3.4);const t=tip(pl);cnDot(cx,t[0],t[1],col,LT[j]);});};
+    mapS.extraDraw=drawAlts(null);mapS.labels=[];
+    {const b=[1e9,1e9,-1e9,-1e9];for(const q of apL.concat(...c.al)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-40,b[1]-40,b[2]+40,b[3]+40],170);}
+    options(c.al.map((_,j)=>LT[j]),LT[c.ac],ok=>{const fb=mapS.k,cx0=mapS.cx,cy0=mapS.cy;reveal();mapS.extraDraw=drawAlts(c.ac);mapS.k=fb;mapS.cx=cx0;mapS.cy=cy0;mapS.draw();grade(key,res(ok),p.learn);});
   }else{
-    $("prompt").innerHTML='<div class="q">¿Puedes pasar a '+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
-    options(CNOPT,right,ok=>{reveal();grade(key,res(ok),p.learn);});
+    const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha",4:"tomar la salida"}[c.k]||KTX[c.k];
+    $("prompt").innerHTML='<div class="q">¿Se puede '+verb+" hacia "+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b> en sentido <b>"+DIRN[c.h]+"</b>"+(lvl===1?" (flecha azul)":"")+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
+    options(["Sí","No"],c.s===0?"Sí":"No",ok=>{reveal();grade(key,res(ok),p.learn);});
   }
 }
 
@@ -1864,7 +1872,7 @@ mapE.dirArrows=false;mapE.showNames=true;chip("ch-names","showNames");mapE.showL
 const mq=window.matchMedia("(prefers-color-scheme: dark)");const recolor=()=>{readColors();if(mapS.tc)mapS.tc.clear();if(mapE.tc)mapE.tc.clear();mapS.draw();mapE.draw();};
 if(mq.addEventListener)mq.addEventListener("change",recolor);new MutationObserver(recolor).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{mapS.draw();mapE.draw();});
-loadLocal();loadCN();if(!ST.meta.dv){ST.meta.zone=-1;ST.meta.dv=1;}if(ST.meta.bq==null)ST.meta.bq=-1;refreshKnown();renderHome();renderSync();initCloud();initSupa();
+$("app-ver").textContent=APPVER;loadLocal();loadCN();if(!ST.meta.dv){ST.meta.zone=-1;ST.meta.dv=1;}if(ST.meta.bq==null)ST.meta.bq=-1;refreshKnown();renderHome();renderSync();initCloud();initSupa();
 try{if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)&&!/claude/.test(location.hostname))navigator.serviceWorker.register("sw.js").catch(()=>{});}catch(e){}
 </script>
 </body>
