@@ -1237,8 +1237,10 @@ function loadCN(){if(!CNload)CNload=fetch("cn.json").then(r=>r.json()).then(j=>{
 const CNORD=new Map();{let i=0;for(const g of BG)for(const o of g.items)CNORD.set(o.key,i++);}
 const DIRN=["norte","noreste","este","sureste","sur","suroeste","oeste","noroeste"];
 const KTX=["seguir recto","girar a la izquierda","girar a la derecha","cambiar de sentido","tomar la salida"];
-const cnPath=c=>c.p?[c.f].concat(c.p):[c.f,[c.x,c.y],c.g];
-const cnLinked=a=>{const o=new Set();for(const c of CN)if(c.a===a){const B=byKey["s"+c.b];if(B)o.add(B.n);}return o;};
+const cnAppr=c=>[c.f].concat(c.q||[]).concat([[c.x,c.y]]);
+const cnPath=c=>c.p?cnAppr(c).concat(c.p.slice(1)):[c.f,[c.x,c.y],c.g];
+const cnAl=(L)=>(L||[]).map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n);
+const cnLinked=a=>{const o=new Set();for(const c of CN)if(c.a===a){const B=byKey["s"+c.b];if(B)o.add(B.n);for(const n of cnAl(c.ba))o.add(n);}return o;};
 const CNOPT=["Sí, girando a la izquierda","Sí, girando a la derecha","Sí, siguiendo recto","No, está prohibido"];
 const knows=o=>{const c=o&&ST.cards[o.key+"n"];return !!(c&&c[3]>0);};
 const cnA=c=>byKey[c.a],cnB=c=>byKey["s"+c.b],cnV=c=>c.v!=null?byKey["s"+c.v]:null;
@@ -1260,7 +1262,7 @@ function cnArrow(c,pts,col,w,dash){if(pts.length<2)return;const P=pts.map(p=>map
 function cnDot(c,x,y,col,txt){const q=mapS.toScreen(x,y);c.save();c.beginPath();c.arc(q[0],q[1],txt?9:6,0,7);c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=2;c.stroke();
   if(txt){c.fillStyle="#fff";c.font="bold 11px system-ui,sans-serif";c.textAlign="center";c.textBaseline="middle";c.fillText(txt,q[0],q[1]+.5);}c.restore();}
 const cnCol=s=>s===0?(COL.ok||"#16a34a"):"#dc2626";
-function cnWhy(c){const A=cnA(c),B=cnB(c);
+function cnWhy(c){const A=cnA(c),B0=cnB(c),al=cnAl(c.ba),B={n:B0.n+(al.length?" (en ese tramo también se llama "+al.join(" / ")+")":"")};
   if(c.a[0]==="h"){const V=cnV(c);return "Saliendo de "+A.n+" por "+V.n+" hacia el "+DIRN[c.h]+", la primera vía del temario es "+B.n+" (a "+fmtD(c.d)+"). Allí puedes "+c.k.map(k=>KTX[k]).join(" o ")+".";}
   const base="Por "+A.n+" hacia el "+DIRN[c.h]+", "+KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n;
   return c.s===0?base+": se puede.":c.s===2?base+": giro prohibido.":base+": no se puede, "+B.n+" va en sentido contrario (dirección prohibida).";}
@@ -1290,9 +1292,9 @@ function renderConn(p){
   const lvTag='<span class="lvl l'+lvl+'">'+(lvl===2?"Nivel 2 · sin mapa":"Nivel 1 · con mapa")+"</span>";
   mapS.hl=[{s:V,color:COL.target,w:2.4}];mapS.labels=[{s:V,force:true}];
   if(isH)mapS.pins=[{x:A.x,y:A.y,color:COL.pin,label:A.n}];
-  const approach=[c.f,[c.x,c.y]];
+  const approach=cnAppr(c),alB=cnAl(c.ba),alA=cnAl(c.aa);
   mapS.extraDraw=(cx)=>{cnArrow(cx,approach,COL.accent||"#2563eb",4,isH?[7,5]:null);if(!isH)cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
-  {const b=[Math.min(c.x,c.f[0]),Math.min(c.y,c.f[1]),Math.max(c.x,c.f[0]),Math.max(c.y,c.f[1])];mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
+  {const b=[1e9,1e9,-1e9,-1e9];for(const q of approach){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
   if(lvl===2)hideMap(true);
   const reveal=()=>{hideMap(false);mapS.hl=[{s:V,color:COL.target,w:2.4},{s:B,color:isH?(COL.ok||"#16a34a"):cnCol(c.s),w:2.6}];mapS.labels=[{s:V,force:true},{s:B,force:true}];
     mapS.extraDraw=(cx)=>{if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
@@ -1301,7 +1303,7 @@ function renderConn(p){
   const res=ok=>ok?(session.hint?1:2):0;
   const where=lvl===2?" hacia el <b>"+DIRN[c.h]+"</b>":" en el sentido de la flecha";
   if(isH){
-    const okN=c.o.map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n);
+    const okN=c.o.map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n).concat(alB);
     $("prompt").innerHTML='<div class="q">¿Cuál es la primera vía del temario a la que llegas? '+lvTag+'</div><div class="extra">Sales de <b>'+esc(A.n)+"</b> por <b>"+esc(V.n)+"</b>"+where+".</div>";
     if(useWrite(key,p))writeQ(B.n,v=>{let m={r:0};for(const n of okN){const s=S.find(x=>x.n===n);const r=gradeWritten(v,s,"s");if(r.r>m.r)m=r;}return m;},r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
     else{const ds=cnNear(c.x,c.y,okN.concat([V.n]),3),sim=simTo(B.n,S,okN.concat([V.n])).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
@@ -1313,9 +1315,9 @@ function renderConn(p){
   if(which){
     const lk=cnLinked(c.a);lk.delete(B.n);
     $("prompt").innerHTML='<div class="q">¿A qué vía llegas? '+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+(c.k===4?(lvl===2?" y tomas una salida. ¿A cuál de estas vías puedes salir por un enlace?":" y tomas la salida marcada."):" y en el cruce marcado quieres <b>"+KTX[c.k]+"</b>.")+"</div>";
-    mapS.extraDraw=(cx)=>{cnArrow(cx,[c.f,[c.x,c.y]],COL.accent||"#2563eb",4);cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
-    if(useWrite(key,p)&&!(c.k===4&&lvl===2))writeQ(B.n,v=>gradeWritten(v,B,"s"),r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
-    else{const ex=[A.n,B.n,...lk],ds=cnNear(c.x,c.y,ex,3),sim=simTo(B.n,S,ex).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
+    mapS.extraDraw=(cx)=>{cnArrow(cx,approach,COL.accent||"#2563eb",4);cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
+    if(useWrite(key,p)&&!(c.k===4&&lvl===2))writeQ(B.n,v=>{let m=gradeWritten(v,B,"s");for(const n of alB){const o=S.find(x=>x.n===n);if(o){const r=gradeWritten(v,o,"s");if(r.r>m.r)m=r;}}return m;},r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
+    else{const ex=[A.n,B.n,...lk,...alA,...alB],ds=cnNear(c.x,c.y,ex,3),sim=simTo(B.n,S,ex).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
       options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
   }else{
     $("prompt").innerHTML='<div class="q">¿Puedes pasar a '+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
