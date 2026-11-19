@@ -85,6 +85,7 @@ h2{font-family:var(--f-display);font-weight:600;font-size:20px;margin:0;letter-s
 .w-ans{font-size:16px;padding:8px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--ink)}.w-ans.none{color:var(--muted);font-style:italic}
 /* hoy */
 .today-b{margin:0;font-size:14px;color:var(--muted)}.today-b b{color:var(--ink)}
+.cn-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;text-align:left}.cn-it{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.35}.cn-it b{flex:none;width:20px;height:20px;border-radius:50%;background:var(--cc);color:#fff;font-size:12px;display:grid;place-items:center;margin-top:1px}
 .npd-row{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:var(--muted)}
 .stepper.sm button{width:34px;height:34px;font-size:18px}.stepper.sm b{min-width:30px;font-size:20px;text-align:center}
 .bmap{position:relative;height:260px;border-radius:12px;overflow:hidden;background:var(--map-bg);border:1px solid var(--line)}
@@ -290,6 +291,7 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
         <p class="today-b" id="today-b"></p>
         <button class="btn primary block" id="b-study">Estudiar ahora</button>
         <div class="npd-row"><span>Nuevas al día</span><div class="stepper sm"><button id="npd2-" aria-label="Menos">−</button><b id="npd2">15</b><button id="npd2+" aria-label="Más">+</button></div></div>
+        <div class="npd-row"><span>Conexiones al día</span><div class="stepper sm"><button id="cpd2-" aria-label="Menos">−</button><b id="cpd2">10</b><button id="cpd2+" aria-label="Más">+</button></div></div>
         <button class="btn block small" id="b-more" style="display:none">Añadir 5 nuevas más hoy</button>
       </div>
       <div class="card">
@@ -399,6 +401,11 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
         <h2>Elementos nuevos al día</h2>
         <div class="stepper"><button id="npd-">−</button><b id="npd">15</b><button id="npd+">+</button><span class="note" id="npd-eta"></span></div>
         <p class="note">Cada vía o hito nuevo genera dos o tres tarjetas (nombrar, ubicar y, en los hitos, su calle).</p>
+      </div>
+      <div class="card">
+        <h2>Conexiones nuevas al día</h2>
+        <div class="stepper"><button id="cpd-">−</button><b id="cpd">10</b><button id="cpd+">+</button></div>
+        <p class="note">Desde cada vía o hito ya aprendido, a qué vías cercanas del temario se puede pasar y qué giros están prohibidos. Primero con el mapa de apoyo y, cuando las aciertes en dos días distintos, sin mapa. Van aparte de las vías nuevas.</p>
       </div>
       <div class="card">
         <h2>Tu progreso</h2>
@@ -865,9 +872,12 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
 
 /* ---------- state + storage ---------- */
 const LS="cbm1:";
-const ST={cards:{},meta:{npd:15,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
+const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
-const allChunks=()=>{const a=[];for(let i=0;i<=Math.floor((S.length-1)/150);i++)a.push("s"+i);for(let i=0;i<=Math.floor((H.length-1)/150);i++)a.push("h"+i);return a;};
+const allChunks=()=>{const a=[];for(let i=0;i<=Math.floor((S.length-1)/150);i++)a.push("s"+i);for(let i=0;i<=Math.floor((H.length-1)/150);i++)a.push("h"+i);
+  /* conexiones: los trozos que existan (en memoria o guardados en el dispositivo) */
+  const js=new Set();for(const k in ST.cards)if(k[0]==="j")js.add(chunkOf(k));try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(LS+"j")&&/^\d+$/.test(k.slice(LS.length+1)))js.add(k.slice(LS.length));}}catch(e){}
+  return a.concat([...js]);};
 const chunkCards=ch=>{const o={};for(const k in ST.cards)if(chunkOf(k)===ch)o[k]=ST.cards[k];return o;};
 const dirty=new Set();let metaDirty=false;
 const dayNum=()=>{const n=new Date();return Math.floor((n.getTime()-n.getTimezoneOffset()*6e4-4*36e5)/864e5);};
@@ -878,7 +888,7 @@ function loadLocal(){const m=lsGet("meta");if(m)Object.assign(ST.meta,m);for(con
 function touch(key){const ch=chunkOf(key);lsSet(ch,chunkCards(ch));dirty.add(ch);syncDirty=true;}
 function touchMeta(){ST.meta.ts=Date.now();lsSet("meta",ST.meta);metaDirty=true;syncDirty=true;}
 let syncDirty=false;
-function rollDay(){const t=dayNum(),m=ST.meta;if(m.dDay!==t){m.dDay=t;m.dNew=0;m.dRev=0;m.extra=0;}}
+function rollDay(){const t=dayNum(),m=ST.meta;if(m.dDay!==t){m.dDay=t;m.dNew=0;m.dCon=0;m.dRev=0;m.extra=0;}}
 
 let cloud=null,cloudMsg="Guardado solo en este dispositivo.";
 const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error("timeout")),ms))]);
@@ -978,19 +988,19 @@ const MCOL=v=>v>=.85?"#16a34a":v>=.5?"#84cc16":v>=.2?"#f59e0b":v>0?"#f97316":nul
 
 /* ---------- session ---------- */
 let session=null,mapS=null,mapE=null,mapC=null;
-function startSession(){
-  rollDay();const t=dayNum(),rev=[],learn=[];
+async function startSession(){
+  await loadCN();rollDay();const t=dayNum(),rev=[],learn=[];
   for(const k in ST.cards){const c=ST.cards[k];if(c[3]>0){if(c[0]<=t)rev.push(k);}else learn.push({key:k,at:0,step:0});}
   rev.sort((a,b)=>ST.cards[a][0]-ST.cards[b][0]||Math.random()-.5);
   shuffle(learn);learn.forEach((l,i)=>l.at=i*2);
-  session={rev,learn,news:nextNew(newBudget()),n:0,sinceNew:9,cur:null,answered:false,done:0};
+  session={rev,learn,news:nextNew(newBudget()),cnews:nextConn(connBudget()),n:0,sinceNew:9,cur:null,answered:false,done:0};
   refreshKnown();show("study");nextCard();
 }
-function remaining(){const s=session;return s.rev.length+s.learn.length+s.news.length*3;}
+function remaining(){const s=session;return s.rev.length+s.learn.length+s.news.length*3+(s.cnews?s.cnews.length*2:0);}
 function pick(){const s=session;s.n++;
   let li=-1;for(let i=0;i<s.learn.length;i++)if(s.learn[i].at<=s.n&&(li<0||s.learn[i].at<s.learn[li].at))li=i;
   if(li>=0){const l=s.learn.splice(li,1)[0];return{type:"card",key:l.key,learn:l};}
-  if(s.rev.length&&(s.sinceNew<4||!s.news.length)){s.sinceNew++;return{type:"card",key:s.rev.shift()};}
+  if(s.rev.length&&(s.sinceNew<4||(!s.news.length&&!(s.cnews&&s.cnews.length)))){s.sinceNew++;return{type:"card",key:s.rev.shift()};}
   /* nuevas por etapas: grupos de 3; el siguiente grupo no empieza hasta acertar una vez cada tarjeta del anterior */
   if(s.news.length&&!s.chunkLeft){
     const pend=s.learn.filter(l=>s.chunk&&s.chunk.has(l.key.slice(0,-1))&&l.step===0);
@@ -1000,6 +1010,12 @@ function pick(){const s=session;s.n++;
     const items=all.slice(0,CHUNK);s.part++;s.chunk=new Set(items.map(o=>o.key));s.chunkLeft=items.length;s.n--;
     return{type:"bintro",g:BG[bg],items,part:s.part,parts:s.parts,prev:s.seenBg.slice()};}
   if(s.news.length){s.sinceNew=0;s.chunkLeft--;const o=s.news.shift();(s.seenBg=s.seenBg||[]).push(o);return{type:"intro",o};}
+  /* conexiones nuevas: de 1 a 3 de la misma vía; el siguiente grupo cuando se haya contestado una vez cada una del anterior */
+  if(s.cnews&&s.cnews.length){
+    const pend=s.learn.filter(l=>s.cchunk&&s.cchunk.has(l.key)&&l.step===0);
+    if(pend.length){pend.sort((a,b)=>a.at-b.at);s.learn.splice(s.learn.indexOf(pend[0]),1);return{type:"card",key:pend[0].key,learn:pend[0]};}
+    const a=s.cnews[0].a,items=s.cnews.filter(c=>c.a===a).slice(0,3);s.cnews=s.cnews.filter(c=>!items.includes(c));
+    s.cchunk=new Set(items.map(c=>"j"+c.i+"j"));s.n--;s.sinceNew=0;return{type:"cintro",items};}
   if(s.rev.length){return{type:"card",key:s.rev.shift()};}
   if(s.learn.length){s.learn.sort((a,b)=>a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
   return null;}
@@ -1008,9 +1024,9 @@ function nextCard(){
   mapS.hl=[];mapS.pins=[];mapS.labels=[];mapS.onTap=null;mapS.showNames=false;mapS.showDir=false;mapS.route=null;mapS.extraDraw=null;mapS.chk=null;hideMap(false);s.hint=false;$("v-study").classList.remove("exdone","exq","exmode");
   $("st-left").textContent=p?"Quedan "+remaining():"";
   if(!p){finish();return;}
-  if(p.type==="intro")renderIntro(p.o);else if(p.type==="bintro")renderBIntro(p.g,p.items,p.part,p.parts,p.prev);else renderCard(p);
+  if(p.type==="intro")renderIntro(p.o);else if(p.type==="cintro")renderCIntro(p.items);else if(p.type==="bintro")renderBIntro(p.g,p.items,p.part,p.parts,p.prev);else renderCard(p);
 }
-const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito · con mapa"],["hC","Calle del hito · sin mapa"],["rt","Recorrido de vías"]];
+const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito · con mapa"],["hC","Calle del hito · sin mapa"],["jc","Conexiones · con mapa"],["jC","Conexiones · sin mapa"],["rt","Recorrido de vías"]];
 const PRANS=[["auto","Según conocimiento"],["mix","Normal"]];
 const PR=Object.assign({types:["sn","su","hn","hu","hc"],zones:G.map((_,i)=>i),bars:[],zm:"b",ans:"auto",seen:true,fails:false,n:20,v:2,rlen:[3]},lsGet("prac")||{});if(!Array.isArray(PR.rlen)||!PR.rlen.length)PR.rlen=[3];if(PR.v!==2){PR.zones=G.map((_,i)=>i);PR.v=2;}if(PR.v<3){PR.v=3;PR.zm="b";PR.bars=BG.map((_,i)=>i);PR.ans="auto";if(![5,10,20].includes(PR.n))PR.n=10;}if(PR.ans!=="auto"&&PR.ans!=="mix")PR.ans="mix";
 PR.rlen=PR.rlen.flatMap(v=>v==="ex"?["ex1","ex2","ex3"]:[v]);
@@ -1021,11 +1037,13 @@ function prPool(){const out=[];for(const o of [...S,...H]){if(!prIn(o))continue;
       if(PR.seen&&!introduced(o))continue;
       if(PR.fails){const cc=ST.cards[o.key+(c==="d"?"n":cl)];if(!cc||(cc[4]<1&&cc[2]>=230))continue;}
       out.push(o.key+c);}}}
+  for(const t of ["jc","jC"]){if(!PR.types.includes(t))continue;for(const c of CN){const A=cnA(c);if(!A||!prIn(A))continue;if(PR.seen&&!connReady(c))continue;
+    if(PR.fails){const cc=ST.cards["j"+c.i+"j"];if(!cc||(cc[4]<1&&cc[2]>=230))continue;}out.push("j"+c.i+(t==="jC"?"J":"j"));}}
   if(PR.types.includes("rt")){const fails=lsGet("rtf")||{};TR.forEach((q,i)=>{if(!q||!PR.rlen.includes(q.s.length))return;const B=byKey["s"+q.s[Math.min(1,q.s.length-1)]];if(!B||!prIn(B))return;
     if(PR.seen&&!q.s.every(id=>introduced(byKey["s"+id])))return;if(PR.fails&&!fails[i])return;out.push("r"+i+"t");});}
   if(PR.types.includes("rt")&&PR.rlen.some(v=>String(v).startsWith("ex"))){const fx=lsGet("exf2")||{};EX.forEach((q,i)=>{if(!PR.rlen.includes(exBand(q)))return;const A=q.at==="s"?S.find(x=>x.n===q.a):H.find(h=>h.n===q.a);if(A&&!prIn(A))return;if(PR.fails&&!fx[i])return;out.push("e"+i+"e");});}
   return out;}
-function renderPrac(){if(!EX.length&&PR.rlen.some(v=>String(v).startsWith("ex")))loadEX();
+function renderPrac(){if(!CN.length)loadCN().then(()=>{if(CN.length&&$("v-prac").classList.contains("on"))renderPrac();});if(!EX.length&&PR.rlen.some(v=>String(v).startsWith("ex")))loadEX();
   const mk=(box,list,isOn,toggle)=>{const e=$(box);e.innerHTML="";list.forEach(([v,l])=>{const b=document.createElement("button");b.className="chip"+(isOn(v)?" on":"");b.textContent=l;b.onclick=()=>{toggle(v);lsSet("prac",PR);renderPrac();};e.appendChild(b);});};
   const tg=(arr,v)=>{const i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v);};
   mk("pr-types",PT,v=>PR.types.includes(v),v=>tg(PR.types,v));
@@ -1066,7 +1084,7 @@ function finish(){
     mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;$("b-again").onclick=()=>{session=null;$("pr-go").onclick();};return;}
   $("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
   const due=countDue(),nb=newBudget();
-  const doneDay=due===0&&nextNew(nb).length===0;
+  const doneDay=due===0&&nextNew(nb).length===0&&nextConn(connBudget()).length===0;
   $("panel").innerHTML='<div class="fb ok">'+(doneDay?"¡Hecho por hoy! ":"Sesión terminada. ")+"Has contestado "+session.done+' tarjetas.</div>'+(session.lvUp?'<p class="note">'+session.lvUp+(session.lvUp===1?" hito pasa":" hitos pasan")+' al nivel 2 (sin mapa).</p>':'')+'<button class="btn primary block" id="b-fin">Volver al inicio</button>';
   mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;
   if(doneDay&&ST.meta.cel!==dayNum()&&session.done>0){ST.meta.cel=dayNum();touchMeta();celebrate();}
@@ -1078,7 +1096,7 @@ function grade(key,res,lr){
   const s=session,t=dayNum();let c=ST.cards[key];if(!c)c=ST.cards[key]=[t,0,230,0,0,0];
   s.done++;ST.meta.dRev++;
   const wasRev=c[3]>0&&!(lr&&lr.re);
-  if(key.endsWith("c")&&wasRev){ /* niveles de «calle del hito»: 2 aciertos seguidos (en días distintos) con mapa -> sin mapa; un fallo sin mapa -> vuelve con mapa una vez */
+  if((key.endsWith("c")||key[0]==="j")&&wasRev){ /* niveles de «calle del hito»: 2 aciertos seguidos (en días distintos) con mapa -> sin mapa; un fallo sin mapa -> vuelve con mapa una vez */
     const lv=c[6]||1;if(res===2&&!s.hint){c[7]=(c[7]||0)+1;if(lv===1&&c[7]>=2){c[6]=2;c[7]=0;s.lvUp=(s.lvUp||0)+1;}}else if(res===0){if(lv===2){c[6]=1;c[7]=1;}else c[7]=0;}else if(!c[6])c[6]=1;}
   if(c[3]===0){ // aprendizaje
     const l=lr||{key,at:0,step:0};
@@ -1158,6 +1176,7 @@ function renderRoute(key){
     grade(key,ok?2:half?1:0,null);},t=>q.t!=="ok"&&t!=="Correcto");
 }
 function renderCard(p){
+  if(p.key[0]==="j"){renderConn(p);return;}
   if(p.key[0]==="r"){renderRoute(p.key);return;}
   if(p.key[0]==="e"){renderExam(p.key);return;}
   const key=p.key,o=byKey[key.slice(0,-1)],nomap=key.slice(-1)==="C",type=key.slice(-1).toLowerCase();
@@ -1211,6 +1230,98 @@ function renderCard(p){
   }
 }
 
+/* ---------- conexiones: desde cada vía o hito, a qué vías del temario se puede pasar ---------- */
+/* van en un archivo aparte (cn.json); cada tarjeta se guarda como "j<número>j" */
+let CN=[],CNI=new Map(),CNload=null;
+function loadCN(){if(!CNload)CNload=fetch("cn.json").then(r=>r.json()).then(j=>{CN=j;CNI=new Map(j.map(c=>[c.i,c]));if(!session)renderHome();}).catch(()=>{CNload=null;});return CNload;}
+const CNORD=new Map();{let i=0;for(const g of BG)for(const o of g.items)CNORD.set(o.key,i++);}
+const DIRN=["norte","noreste","este","sureste","sur","suroeste","oeste","noroeste"];
+const KTX=["seguir recto","girar a la izquierda","girar a la derecha","cambiar de sentido","tomar la salida"];
+const cnPath=c=>c.p?[c.f].concat(c.p):[c.f,[c.x,c.y],c.g];
+const cnLinked=a=>{const o=new Set();for(const c of CN)if(c.a===a){const B=byKey["s"+c.b];if(B)o.add(B.n);}return o;};
+const CNOPT=["Sí, girando a la izquierda","Sí, girando a la derecha","Sí, siguiendo recto","No, está prohibido"];
+const knows=o=>{const c=o&&ST.cards[o.key+"n"];return !!(c&&c[3]>0);};
+const cnA=c=>byKey[c.a],cnB=c=>byKey["s"+c.b],cnV=c=>c.v!=null?byKey["s"+c.v]:null;
+function connBudget(){rollDay();return Math.max(0,(ST.meta.cpd==null?10:ST.meta.cpd)-(ST.meta.dCon||0));}
+function connReady(c){const A=cnA(c),B=cnB(c);if(!A||!B||!knows(A)||!knows(B))return false;if(c.v!=null&&!knows(cnV(c)))return false;return true;}
+function nextConn(n){if(!CN.length||n<=0)return[];const el=[];
+  for(const c of CN){if(ST.cards["j"+c.i+"j"])continue;if(connReady(c))el.push(c);}
+  const ord=c=>Math.max(CNORD.has(c.a)?CNORD.get(c.a):1e9,CNORD.has("s"+c.b)?CNORD.get("s"+c.b):1e9);
+  el.sort((x,y)=>ord(x)-ord(y)||x.i-y.i);
+  const byA=new Map();for(const c of el){if(!byA.has(c.a))byA.set(c.a,[]);byA.get(c.a).push(c);}
+  const out=[];for(const L of byA.values())for(const c of L){if(out.length>=n)return out;out.push(c);}return out;}
+/* flecha en el mapa (coordenadas del mapa) */
+function cnArrow(c,pts,col,w,dash){if(pts.length<2)return;const P=pts.map(p=>mapS.toScreen(p[0],p[1]));
+  c.save();c.lineCap="round";c.lineJoin="round";c.beginPath();P.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));
+  c.strokeStyle="#fff";c.lineWidth=w+4;c.stroke();c.strokeStyle=col;c.lineWidth=w;if(dash)c.setLineDash(dash);c.stroke();c.setLineDash([]);
+  const a=P[P.length-2],b=P[P.length-1],ang=Math.atan2(b[1]-a[1],b[0]-a[0]),L=w*3.2+4;
+  c.beginPath();c.moveTo(b[0]+Math.cos(ang)*2,b[1]+Math.sin(ang)*2);c.lineTo(b[0]-Math.cos(ang-.5)*L,b[1]-Math.sin(ang-.5)*L);c.lineTo(b[0]-Math.cos(ang+.5)*L,b[1]-Math.sin(ang+.5)*L);c.closePath();
+  c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=1.5;c.stroke();c.restore();}
+function cnDot(c,x,y,col,txt){const q=mapS.toScreen(x,y);c.save();c.beginPath();c.arc(q[0],q[1],txt?9:6,0,7);c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=2;c.stroke();
+  if(txt){c.fillStyle="#fff";c.font="bold 11px system-ui,sans-serif";c.textAlign="center";c.textBaseline="middle";c.fillText(txt,q[0],q[1]+.5);}c.restore();}
+const cnCol=s=>s===0?(COL.ok||"#16a34a"):"#dc2626";
+function cnWhy(c){const A=cnA(c),B=cnB(c);
+  if(c.a[0]==="h"){const V=cnV(c);return "Saliendo de "+A.n+" por "+V.n+" hacia el "+DIRN[c.h]+", la primera vía del temario es "+B.n+" (a "+fmtD(c.d)+"). Allí puedes "+c.k.map(k=>KTX[k]).join(" o ")+".";}
+  const base="Por "+A.n+" hacia el "+DIRN[c.h]+", "+KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n;
+  return c.s===0?base+": se puede.":c.s===2?base+": giro prohibido.":base+": no se puede, "+B.n+" va en sentido contrario (dirección prohibida).";}
+/* presentación de 1 a 3 conexiones de la misma vía o hito */
+function renderCIntro(items){
+  const s=session,t=dayNum();items.forEach((c,i)=>{const k="j"+c.i+"j";if(!ST.cards[k]){ST.cards[k]=[t,0,230,0,0,nowMin(),1,0];touch(k);}ST.meta.dCon=(ST.meta.dCon||0)+1;s.learn.push({key:k,at:s.n+2+i*3,step:0});});touchMeta();
+  const c0=items[0],A=cnA(c0),isH=c0.a[0]==="h",V=isH?cnV(c0):A;
+  $("st-tag").textContent="Conexiones";$("st-tag").className="tag new";
+  $("prompt").innerHTML='<div class="q">'+(isH?"Saliendo de":"Desde")+" "+esc(A.n)+'</div><div class="extra">'+(isH?"La primera vía del temario a la que llegas por "+esc(V.n)+" en cada sentido.":"A qué vías del temario puedes pasar (en verde) y a cuáles no (en rojo).")+'</div><div class="cn-list">'+items.map((c,i)=>'<div class="cn-it" style="--cc:'+ICOL[i%ICOL.length]+'"><b>'+(i+1)+'</b><span>'+esc(cnWhy(c))+'</span></div>').join("")+"</div>";
+  mapS.showNames=true;mapS.hl=[{s:V,color:COL.target,w:2.4}].concat(items.map((c,i)=>({s:cnB(c),color:ICOL[i%ICOL.length],w:2.2})));
+  mapS.labels=[{s:V,force:true}].concat(items.map(c=>({s:cnB(c),force:true})));
+  if(isH)mapS.pins=[{x:A.x,y:A.y,color:COL.pin,label:A.n}];
+  mapS.extraDraw=(cx)=>{items.forEach((c,i)=>{const col=isH?(COL.ok||"#16a34a"):cnCol(c.s);if(isH)cnArrow(cx,[c.f,[c.x,c.y]],col,3.5,[7,5]);else cnArrow(cx,cnPath(c),col,4);cnDot(cx,c.x,c.y,ICOL[i%ICOL.length],String(i+1));});};
+  const b=[1e9,1e9,-1e9,-1e9],add=(x,y)=>{b[0]=Math.min(b[0],x);b[1]=Math.min(b[1],y);b[2]=Math.max(b[2],x);b[3]=Math.max(b[3],y);};
+  for(const c of items){add(c.x,c.y);add(c.f[0],c.f[1]);for(const q of cnPath(c))add(q[0],q[1]);}mapS.fit([b[0]-120,b[1]-120,b[2]+120,b[3]+120],380);
+  $("panel").innerHTML='<p class="hint">Mira cada cruce en el mapa: el número marca dónde está.</p><button class="btn primary block" id="b-ok">Vistas: a practicarlas</button>';$("b-ok").onclick=nextCard;}
+/* distractores: vías del temario cerca del cruce */
+function cnNear(x,y,excl,n){const out=[];const cand=S.filter(s=>!s.hw&&!excl.includes(s.n)&&s.b[0]-400<x&&s.b[2]+400>x&&s.b[1]-400<y&&s.b[3]+400>y).map(s=>[distTo(s,x,y),s]).sort((a,b)=>a[0]-b[0]);
+  for(const [d,s] of cand){if(out.length>=n)break;if(!out.some(o=>o.n===s.n))out.push(s);}return out;}
+function renderConn(p){
+  const key=p.key,c=CNI.get(+key.slice(1,-1));if(!c){nextCard();return;}
+  const A=cnA(c),B=cnB(c),isH=c.a[0]==="h",V=isH?cnV(c):A;if(!A||!B||!V){nextCard();return;}
+  const cc=ST.cards[key],nomap=key.slice(-1)==="J";
+  const lvl=session.practice?(nomap?2:1):(cc&&cc[3]>0&&!(p.learn&&p.learn.re)&&cc[6]===2?2:1);
+  if(session.practice){$("st-tag").textContent="Práctica · "+(session.done+1)+"/"+session.total;$("st-tag").className="tag";}
+  else{$("st-tag").textContent=(cc&&cc[3]>0&&!(p.learn&&p.learn.re))?"Repaso":"Aprendiendo";$("st-tag").className="tag";}
+  const lvTag='<span class="lvl l'+lvl+'">'+(lvl===2?"Nivel 2 · sin mapa":"Nivel 1 · con mapa")+"</span>";
+  mapS.hl=[{s:V,color:COL.target,w:2.4}];mapS.labels=[{s:V,force:true}];
+  if(isH)mapS.pins=[{x:A.x,y:A.y,color:COL.pin,label:A.n}];
+  const approach=[c.f,[c.x,c.y]];
+  mapS.extraDraw=(cx)=>{cnArrow(cx,approach,COL.accent||"#2563eb",4,isH?[7,5]:null);if(!isH)cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
+  {const b=[Math.min(c.x,c.f[0]),Math.min(c.y,c.f[1]),Math.max(c.x,c.f[0]),Math.max(c.y,c.f[1])];mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
+  if(lvl===2)hideMap(true);
+  const reveal=()=>{hideMap(false);mapS.hl=[{s:V,color:COL.target,w:2.4},{s:B,color:isH?(COL.ok||"#16a34a"):cnCol(c.s),w:2.6}];mapS.labels=[{s:V,force:true},{s:B,force:true}];
+    mapS.extraDraw=(cx)=>{if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
+    mapS.resize();{const b=[1e9,1e9,-1e9,-1e9];for(const q of isH?approach:cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
+    mapS.draw();$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");};
+  const res=ok=>ok?(session.hint?1:2):0;
+  const where=lvl===2?" hacia el <b>"+DIRN[c.h]+"</b>":" en el sentido de la flecha";
+  if(isH){
+    const okN=c.o.map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n);
+    $("prompt").innerHTML='<div class="q">¿Cuál es la primera vía del temario a la que llegas? '+lvTag+'</div><div class="extra">Sales de <b>'+esc(A.n)+"</b> por <b>"+esc(V.n)+"</b>"+where+".</div>";
+    if(useWrite(key,p))writeQ(B.n,v=>{let m={r:0};for(const n of okN){const s=S.find(x=>x.n===n);const r=gradeWritten(v,s,"s");if(r.r>m.r)m=r;}return m;},r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
+    else{const ds=cnNear(c.x,c.y,okN.concat([V.n]),3),sim=simTo(B.n,S,okN.concat([V.n])).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
+      options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
+    return;}
+  /* vía -> vía: dos formas de pregunta */
+  const right=c.s===0?CNOPT[[2,0,1][c.k]]:CNOPT[3];
+  const which=c.k===4||(lvl===1&&c.s===0&&(useWrite(key,p)||((cc&&cc[3])+c.i)%2===0));
+  if(which){
+    const lk=cnLinked(c.a);lk.delete(B.n);
+    $("prompt").innerHTML='<div class="q">¿A qué vía llegas? '+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+(c.k===4?(lvl===2?" y tomas una salida. ¿A cuál de estas vías puedes salir por un enlace?":" y tomas la salida marcada."):" y en el cruce marcado quieres <b>"+KTX[c.k]+"</b>.")+"</div>";
+    mapS.extraDraw=(cx)=>{cnArrow(cx,[c.f,[c.x,c.y]],COL.accent||"#2563eb",4);cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
+    if(useWrite(key,p)&&!(c.k===4&&lvl===2))writeQ(B.n,v=>gradeWritten(v,B,"s"),r=>{reveal();grade(key,Math.min(r,session.hint?1:2),p.learn);},{ph:"Escribe el nombre de la vía"});
+    else{const ex=[A.n,B.n,...lk],ds=cnNear(c.x,c.y,ex,3),sim=simTo(B.n,S,ex).filter(s=>!ds.includes(s)).slice(0,1),opts=shuffle(ds.slice(0,3-sim.length).concat(sim).map(s=>s.n).concat([B.n]));
+      options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
+  }else{
+    $("prompt").innerHTML='<div class="q">¿Puedes pasar a '+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+where+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
+    options(CNOPT,right,ok=>{reveal();grade(key,res(ok),p.learn);});
+  }
+}
 
 
 /* ---------- recorridos tipo examen: 3 opciones entre dos hitos ---------- */
@@ -1583,7 +1694,7 @@ function renderHome(){
   rollDay();const due=countDue(),nb=Math.min(newBudget(),nextNew(999).length);
   let lrn=0;for(const k in ST.cards)if(ST.cards[k][3]===0)lrn++;
   $("s-due").textContent=due;$("s-new").textContent=nb;$("s-streak").textContent=(ST.meta.lastDay>=dayNum()-1)?ST.meta.streak:0;
-  const any=due+nb+lrn>0;$("b-study").disabled=!any;$("b-study").textContent=any?(ST.meta.dRev?"Seguir estudiando":"Estudiar ahora"):"Hecho por hoy";
+  const nc=Math.min(connBudget(),nextConn(connBudget()).length);const any=due+nb+lrn+nc>0;$("b-study").disabled=!any;$("b-study").textContent=any?(ST.meta.dRev?"Seguir estudiando":"Estudiar ahora"):"Hecho por hoy";
   let intro=0,lr=0,si=0,hi=0;for(const o of S){if(introduced(o)){intro++;si++;if(learned(o))lr++;}}for(const o of H){if(introduced(o)){intro++;hi++;if(learned(o))lr++;}}
   $("b-more").style.display=(!nb&&intro<TOTAL)?"":"none";
   $("p-txt").textContent=intro.toLocaleString("es-ES")+" de "+TOTAL.toLocaleString("es-ES")+" vistas";
@@ -1598,8 +1709,8 @@ function renderHome(){
   /* en la portada: el barrio en curso y los dos siguientes */
   {const ord=groupOrder().filter(gi=>BG[gi].items.some(o=>!introduced(o)));for(const gi of ord.slice(0,3))z.appendChild(row(BG[gi],gi));}
   if(za.closest("details").open)BG.forEach((g,gi)=>za.appendChild(row(g,gi)));else za._lazy=true;
-  {const g=cg>=0?BG[cg]:null,nn=Math.min(newBudget(),nextNew(999).length);$("today-b").innerHTML=g?(nn?"Nuevas de hoy: <b>"+esc(g.name)+"</b>"+(g.dist?" ("+esc(g.dist)+")":""):"Hoy ya has visto las nuevas. Quedan los repasos."):"Has visto todo el callejero.";}
-  $("npd2").textContent=ST.meta.npd;drawBmap();
+  {const g=cg>=0?BG[cg]:null,nn=Math.min(newBudget(),nextNew(999).length);$("today-b").innerHTML=(g?(nn?"Nuevas de hoy: <b>"+esc(g.name)+"</b>"+(g.dist?" ("+esc(g.dist)+")":""):"Hoy ya has visto las nuevas. Quedan los repasos."):"Has visto todo el callejero.")+(nc?"<br>Conexiones nuevas: <b>"+nc+"</b>":"");}
+  $("npd2").textContent=ST.meta.npd;$("cpd2").textContent=$("cpd").textContent=ST.meta.cpd==null?10:ST.meta.cpd;drawBmap();
   $("npd").textContent=ST.meta.npd;$("npd-eta").textContent=left?"Terminarías en unos "+Math.ceil(left/ST.meta.npd/30)+" meses":"";
 }
 function renderSync(){$("sync").textContent=cloudMsg;}
@@ -1617,6 +1728,8 @@ $("b-more").onclick=()=>{rollDay();ST.meta.extra+=5;touchMeta();renderHome();};
 $("npd-").onclick=()=>{ST.meta.npd=Math.max(3,ST.meta.npd-1);touchMeta();renderHome();};
 $("npd+").onclick=()=>{ST.meta.npd=Math.min(60,ST.meta.npd+1);touchMeta();renderHome();};
 $("npd2-").onclick=$("npd-").onclick;$("npd2+").onclick=$("npd+").onclick;
+$("cpd-").onclick=$("cpd2-").onclick=()=>{ST.meta.cpd=Math.max(0,(ST.meta.cpd==null?10:ST.meta.cpd)-1);touchMeta();renderHome();};
+$("cpd+").onclick=$("cpd2+").onclick=()=>{ST.meta.cpd=Math.min(80,(ST.meta.cpd==null?10:ST.meta.cpd)+1);touchMeta();renderHome();};
 document.querySelector(".zall").addEventListener("toggle",e=>{if(e.target.open&&$("zones-all")._lazy){$("zones-all")._lazy=false;renderHome();}});
 function pickBarrio(gi){ST.meta.bq=gi;touchMeta();renderHome();}
 /* mapa de dominio por barrios (portada) */
@@ -1749,7 +1862,7 @@ mapE.dirArrows=false;mapE.showNames=true;chip("ch-names","showNames");mapE.showL
 const mq=window.matchMedia("(prefers-color-scheme: dark)");const recolor=()=>{readColors();if(mapS.tc)mapS.tc.clear();if(mapE.tc)mapE.tc.clear();mapS.draw();mapE.draw();};
 if(mq.addEventListener)mq.addEventListener("change",recolor);new MutationObserver(recolor).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{mapS.draw();mapE.draw();});
-loadLocal();if(!ST.meta.dv){ST.meta.zone=-1;ST.meta.dv=1;}if(ST.meta.bq==null)ST.meta.bq=-1;refreshKnown();renderHome();renderSync();initCloud();initSupa();
+loadLocal();loadCN();if(!ST.meta.dv){ST.meta.zone=-1;ST.meta.dv=1;}if(ST.meta.bq==null)ST.meta.bq=-1;refreshKnown();renderHome();renderSync();initCloud();initSupa();
 try{if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)&&!/claude/.test(location.hostname))navigator.serviceWorker.register("sw.js").catch(()=>{});}catch(e){}
 </script>
 </body>
