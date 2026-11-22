@@ -155,9 +155,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 .svbtn{position:absolute;left:10px;bottom:10px;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center}
 .svbtn svg{width:22px;height:22px;fill:#e8a400;stroke:#7a5600;stroke-width:1}
 .svbtn{touch-action:none;cursor:grab}
-#svghost{position:fixed;z-index:40;width:44px;height:44px;margin:-44px 0 0 -22px;pointer-events:none;display:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))}
-#svghost svg{width:44px;height:44px;fill:#e8a400;stroke:#7a5600;stroke-width:.8}
-#svghost::after{content:"";position:absolute;left:50%;bottom:-6px;width:14px;height:6px;margin-left:-7px;border-radius:50%;background:rgba(232,164,0,.55)}
+.svghost{position:fixed;z-index:40;width:44px;height:44px;margin:-44px 0 0 -22px;pointer-events:none;display:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))}
+.svghost svg{width:44px;height:44px;fill:#e8a400;stroke:#7a5600;stroke-width:.8}
+.svghost::after{content:"";position:absolute;left:50%;bottom:-6px;width:14px;height:6px;margin-left:-7px;border-radius:50%;background:rgba(232,164,0,.55)}
 .mapwrap.svdrag canvas{outline:3px solid #e8a400;outline-offset:-3px}
 .zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
 .zoom button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:22px;line-height:1;font-weight:600}
@@ -323,6 +323,7 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
     <div class="topbar"><button class="x" id="b-exit">Salir</button><span class="tag" id="st-tag"></span><span class="left" id="st-left"></span></div>
     <div id="prompt"></div>
     <div class="mapwrap"><canvas id="c-study"></canvas>
+      <a id="sv2" style="display:none" class="svbtn" href="#" target="_blank" rel="noopener" aria-label="Abrir Street View aquí" title="Abrir Street View aquí"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><path d="M9 21v-6H7.5v-4.5a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3V15H15v6z"/></svg></a>
       <div id="nomap" hidden><div class="nm-in"><svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/><path d="M2 2l20 20"/></svg><b>Sin mapa</b><span>Como en el examen: tira de memoria.</span><button class="btn small" id="b-pista">Ver mapa (pista)</button><small>Si miras el mapa y aciertas, cuenta como «casi».</small></div></div>
       <div class="zoom"><button data-z="1.6" aria-label="Acercar">+</button><button data-z="0.625" aria-label="Alejar">−</button></div>
     </div>
@@ -642,7 +643,7 @@ class MapView{
   zoomAt(f,sx,sy){const w=this.toWorld(sx,sy);this.k=Math.max(0.008,Math.min(6,this.k*f));this.cx=w[0]-(sx-this.W/2)/this.k;this.cy=w[1]+(sy-this.H/2)/this.k;}
   zoom(f){this.zoomAt(f,this.W/2,this.H/2);this.draw();}
   fit(b,minSpan){if(!this.W){this.pendingFit=[b,minSpan];return;}const w=Math.max(b[2]-b[0],minSpan||0),h=Math.max(b[3]-b[1],minSpan||0);this.cx=(b[0]+b[2])/2;this.cy=(b[1]+b[3])/2;this.k=Math.max(0.008,Math.min(6,Math.min((this.W-50)/w,(this.H-50)/h)));this.draw();}
-  draw(){if(this.raf)return;this.raf=requestAnimationFrame(()=>{this.raf=0;
+  draw(){if(typeof mapS!=="undefined"&&this===mapS){const b=document.getElementById("sv2");if(b)b.style.display=session&&session.answered?"flex":"none";}if(this.raf)return;this.raf=requestAnimationFrame(()=>{this.raf=0;
       const busy=performance.now()-(this.lastGesture||0)<160;
       if(busy&&this.snap&&this.snapV){this.fast();clearTimeout(this.fullT);this.fullT=setTimeout(()=>this.draw(),170);}
       else{this.paint();this.keepSnap();}});}
@@ -885,7 +886,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.80";
+const APPVER="0.81";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1948,9 +1949,9 @@ mapS=new MapView($("c-study"));mapE=new MapView($("c-map"));mapC=new MapView($("
 /* Street View: centro del mapa, o la llegada al cruce seleccionada mirando hacia el cruce */
 function toLL(x,y){return [y/D.o[3]+D.o[1],x/D.o[2]+D.o[0]];}
 /* Street View: arrastra el muñeco hasta el punto del mapa, como en Google Maps */
-{const sv=$("sv"),ghost=document.createElement("div");ghost.id="svghost";ghost.innerHTML=sv.innerHTML;document.body.appendChild(ghost);
+function svInit(sv,M,cv,info){const ghost=document.createElement("div");ghost.className="svghost";ghost.id=sv.id==="sv"?"svghost":"svghost2";ghost.innerHTML=sv.innerHTML;document.body.appendChild(ghost);
   let drag=null;
-  const svHead=(x,y)=>{let best=null,bd=1e18;for(const w of (mapE.visW||[])){const L=w[2];for(let q=1;q<L.length;q++){const a=NODE.get(L[q-1]),b=NODE.get(L[q]);if(!a||!b)continue;const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;if(!l)continue;let t=((x-a[0])*dx+(y-a[1])*dy)/l;t=t<0?0:t>1?1:t;const d=(a[0]+t*dx-x)**2+(a[1]+t*dy-y)**2;if(d<bd){bd=d;best=[a[0]+t*dx,a[1]+t*dy,dx,dy];}}}
+  const svHead=(x,y)=>{let best=null,bd=1e18;for(const w of (M.visW||[])){const L=w[2];for(let q=1;q<L.length;q++){const a=NODE.get(L[q-1]),b=NODE.get(L[q]);if(!a||!b)continue;const dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;if(!l)continue;let t=((x-a[0])*dx+(y-a[1])*dy)/l;t=t<0?0:t>1?1:t;const d=(a[0]+t*dx-x)**2+(a[1]+t*dy-y)**2;if(d<bd){bd=d;best=[a[0]+t*dx,a[1]+t*dy,dx,dy];}}}
     if(best&&bd<40*40)return {x:best[0],y:best[1],h:(90-Math.atan2(best[3],best[2])*180/Math.PI+360)%360};
     const s=streetAt(x,y,40);if(s){let bx=x,by=y;const p=nearPt(s,x,y);return {x:p[0],y:p[1],h:null};}return {x,y,h:null};};
   const svUrl=(x,y,h)=>{const ll=toLL(x,y);return "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint="+ll[0].toFixed(6)+","+ll[1].toFixed(6)+(h!==null&&h!==undefined?"&heading="+Math.round(h):"");};
@@ -1959,17 +1960,17 @@ function toLL(x,y){return [y/D.o[3]+D.o[1],x/D.o[2]+D.o[0]];}
     drag.moved=true;ghost.style.display="block";ghost.style.left=e.clientX+"px";ghost.style.top=(e.clientY-12)+"px";sv.closest(".mapwrap").classList.add("svdrag");});
   const end=e=>{if(!drag||e.pointerId!==drag.id)return;const d=drag;drag=null;ghost.style.display="none";sv.closest(".mapwrap").classList.remove("svdrag");
     if(!d.moved)return;sv.dataset.dragged="1";setTimeout(()=>{delete sv.dataset.dragged;},400);
-    const r=$("c-map").getBoundingClientRect(),px=e.clientX,py=e.clientY-12;if(px<r.left||px>r.right||py<r.top||py>r.bottom)return;
-    const w=mapE.toWorld(px-r.left,py-r.top),hd=svHead(w[0],w[1]);
-    mapE.pins=[{x:hd.x,y:hd.y,color:"#e8a400"}];mapE.draw();
+    const r=cv.getBoundingClientRect(),px=e.clientX,py=e.clientY-12;if(px<r.left||px>r.right||py<r.top||py>r.bottom)return;
+    const w=M.toWorld(px-r.left,py-r.top),hd=svHead(w[0],w[1]);
+    M.pins=[{x:hd.x,y:hd.y,color:"#e8a400"}];M.draw();
     const url=svUrl(hd.x,hd.y,hd.h);let win=null;try{win=window.open(url,"_blank","noopener");}catch(_){}
-    if(!win){sv.href=url;$("info").style.display="block";$("info").innerHTML='Street View listo<small><a href="'+url+'" target="_blank" rel="noopener">Abrir Street View en este punto</a></small>';}};
+    if(!win&&info){sv.href=url;info.style.display="block";info.innerHTML='Street View listo<small><a href="'+url+'" target="_blank" rel="noopener">Abrir Street View en este punto</a></small>';}};
   sv.addEventListener("pointerup",end);sv.addEventListener("pointercancel",e=>{drag=null;ghost.style.display="none";sv.closest(".mapwrap").classList.remove("svdrag");});
-}
-$("sv").addEventListener("click",ev=>{if($("sv").dataset.dragged){ev.preventDefault();return;}let x=mapE.cx,y=mapE.cy,head=null;
-  const f=mapE.focus;if(f){const u=NODE.get(f.u),n=NODE.get(f.n);if(u&&n){const dx=n[0]-u[0],dy=n[1]-u[1],L=Math.hypot(dx,dy)||1,b=Math.min(25,L*0.8);x=n[0]-dx/L*b;y=n[1]-dy/L*b;head=(90-Math.atan2(dy,dx)*180/Math.PI+360)%360;}}
-  else if(mapE.hl.length){const s=mapE.hl[0].s;let bd=1e18;for(const a of s.R)for(let i=0;i<a.length;i+=2){const d=(a[i]-mapE.cx)**2+(a[i+1]-mapE.cy)**2;if(d<bd){bd=d;x=a[i];y=a[i+1];}}}
-  const ll=toLL(x,y);$("sv").href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint="+ll[0].toFixed(6)+","+ll[1].toFixed(6)+(head!==null?"&heading="+Math.round(head):"");});
+sv.addEventListener("click",ev=>{if(sv.dataset.dragged){ev.preventDefault();return;}let x=M.cx,y=M.cy,head=null;
+  const f=M.focus;if(f){const u=NODE.get(f.u),n=NODE.get(f.n);if(u&&n){const dx=n[0]-u[0],dy=n[1]-u[1],L=Math.hypot(dx,dy)||1,b=Math.min(25,L*0.8);x=n[0]-dx/L*b;y=n[1]-dy/L*b;head=(90-Math.atan2(dy,dx)*180/Math.PI+360)%360;}}
+  else if(M.hl.length){const s=M.hl[0].s;let bd=1e18;for(const a of s.R)for(let i=0;i<a.length;i+=2){const d=(a[i]-M.cx)**2+(a[i+1]-M.cy)**2;if(d<bd){bd=d;x=a[i];y=a[i+1];}}}
+  const ll=toLL(x,y);sv.href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint="+ll[0].toFixed(6)+","+ll[1].toFixed(6)+(head!==null?"&heading="+Math.round(head):"");});}
+svInit($("sv"),mapE,$("c-map"),$("info"));svInit($("sv2"),mapS,$("c-study"),null);
 function laneTap(x,y){if(!mapE.showLanes||mapE.k<0.45||!mapE.laneTiles)return false;
   const tol=24/mapE.k;let best=null,bd=tol;
   for(const w of (mapE.visW||[])){const L=w[2];for(let q=1;q<L.length;q++){const a=NODE.get(L[q-1]),b=NODE.get(L[q]);if(!a||!b)continue;
