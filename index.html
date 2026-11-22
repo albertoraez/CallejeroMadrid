@@ -310,7 +310,7 @@ textarea{width:100%;min-height:90px;font:12px/1.3 ui-monospace,Menlo,monospace;b
       </div>
       <div class="card" style="gap:0">
         <h2 style="margin-bottom:6px">Tu mapa de barrios</h2>
-        <p class="note" style="margin-bottom:8px">Primero un esqueleto corto con los grandes ejes y enseguida barrio a barrio (los parques de bomberos van en su barrio), desde Sol hacia fuera. Cada vía va al barrio por el que pasa más tramo. Toca un barrio para estudiarlo a continuación.</p>
+        <p class="note" style="margin-bottom:8px">Primero un esqueleto corto (grandes ejes y parques de bomberos) y enseguida barrio a barrio, desde Sol hacia fuera. Cada vía va al barrio por el que pasa más tramo. Toca un barrio para estudiarlo a continuación.</p>
         <div class="bmap"><canvas id="c-bmap"></canvas></div>
         <div class="mk-legend"><span><i style="background:#16a34a"></i>Dominado</span><span><i style="background:#84cc16"></i>Bien</span><span><i style="background:#f59e0b"></i>Empezado</span><span><i style="background:#f97316"></i>Recién visto</span><span><i class="e"></i>Sin ver</span></div>
         <div id="zones"></div>
@@ -585,7 +585,7 @@ for(let z=0;z<NZ;z++){const b=[1e9,1e9,-1e9,-1e9];for(const s of S)if(s.z===z&&!
 const SKORD=["Autovía M-30","Paseo de la Castellana","Calle de Alcalá","Calle Gran Vía","Gran Vía","Paseo del Prado","Paseo de Recoletos","Calle de la Princesa","Autovía A-1","Autovía A-2","Autovía A-3","Autovía A-4","Autovía A-5","Autovía A-6","Autovía A-42","Autovía M-40","Autovía M-11","Autopista R-3","Autovía M-45","Autovía M-50","Autovía M-607","Autovía M-12"];
 /* curriculum: group 0 = esqueleto, groups 1..NZ = zonas */
 const SKN=24,G=[];
-{const sk=[...new Set(S.slice(0,SKN).concat(S.filter(s=>SKORD.includes(s.n))))];sk.forEach(o=>o.sk=true);G.push({name:"Esqueleto de la ciudad",items:sk,z:-1});
+{const sk=H.filter(h=>h.fire).concat([...new Set(S.slice(0,SKN).concat(S.filter(s=>SKORD.includes(s.n))))]);sk.forEach(o=>o.sk=true);G.push({name:"Esqueleto de la ciudad",items:sk,z:-1});
  for(let z=0;z<NZ;z++){const ss=S.filter(s=>s.z===z&&!s.sk),hh=H.filter(h=>h.z===z&&!h.sk),it=[];let j=0;const every=Math.max(2,Math.round(ss.length/Math.max(1,hh.length)));
   ss.forEach((s,i)=>{it.push(s);if((i+1)%every===0&&j<hh.length)it.push(hh[j++]);});while(j<hh.length)it.push(hh[j++]);
   G.push({name:D.parks[z],items:it,z});}}
@@ -885,7 +885,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.78";
+const APPVER="0.79";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
