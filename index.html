@@ -885,7 +885,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.75";
+const APPVER="0.76";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1012,14 +1012,19 @@ async function startSession(){
   refreshKnown();show("study");nextCard();
 }
 function remaining(){const s=session;return s.rev.length+s.learn.length+s.news.length*3+(s.cnews?s.cnews.length*2:0);}
+/* espaciado: la misma vía o hito no vuelve hasta pasadas al menos 4 tarjetas de otras cosas */
+const itemOfKey=k=>k[0]==="j"?(()=>{const c=CNI.get(+k.slice(1,-1));return c?c.a:k;})():k.slice(0,-1);
+const isRecent=k=>(session.recent||[]).includes(itemOfKey(k));
 function pick(){const s=session;s.n++;
-  let li=-1;for(let i=0;i<s.learn.length;i++)if(s.learn[i].at<=s.n&&(li<0||s.learn[i].at<s.learn[li].at))li=i;
+  let li=-1;for(let i=0;i<s.learn.length;i++)if(s.learn[i].at<=s.n&&!isRecent(s.learn[i].key)&&(li<0||s.learn[i].at<s.learn[li].at))li=i;
   if(li>=0){const l=s.learn.splice(li,1)[0];return{type:"card",key:l.key,learn:l};}
+  /* si lo pendiente es de lo que acaba de salir, mejor un repaso de otra cosa */
+  if(s.rev.length&&s.learn.some(l=>l.at<=s.n)){const ri=s.rev.findIndex(k=>!isRecent(k));if(ri>=0){s.sinceNew++;return{type:"card",key:s.rev.splice(ri,1)[0]};}}
   if(s.rev.length&&(s.sinceNew<4||(!s.news.length&&!(s.cnews&&s.cnews.length)))){s.sinceNew++;return{type:"card",key:s.rev.shift()};}
   /* nuevas por etapas: grupos de 3; el siguiente grupo no empieza hasta acertar una vez cada tarjeta del anterior */
   if(s.news.length&&!s.chunkLeft){
     const pend=s.learn.filter(l=>s.chunk&&s.chunk.has(l.key.slice(0,-1))&&l.step===0);
-    if(pend.length){pend.sort((a,b)=>a.at-b.at);s.learn.splice(s.learn.indexOf(pend[0]),1);return{type:"card",key:pend[0].key,learn:pend[0]};}
+    if(pend.length){pend.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);s.learn.splice(s.learn.indexOf(pend[0]),1);return{type:"card",key:pend[0].key,learn:pend[0]};}
     const bg=s.news[0].bg,all=s.news.filter(o=>o.bg===bg);
     if(bg!==s.lastBg){s.lastBg=bg;s.part=0;s.parts=Math.ceil(all.length/CHUNK);s.seenBg=[];}
     const items=all.slice(0,CHUNK);s.part++;s.chunk=new Set(items.map(o=>o.key));s.chunkLeft=items.length;s.n--;
@@ -1032,16 +1037,18 @@ function pick(){const s=session;s.n++;
     const a=s.cnews[0].a,items=s.cnews.filter(c=>c.a===a).slice(0,3);s.cnews=s.cnews.filter(c=>!items.includes(c));
     s.cchunk=new Set(items.map(c=>"j"+c.i+"j"));s.n--;s.sinceNew=0;return{type:"cintro",items};}
   if(s.rev.length){return{type:"card",key:s.rev.shift()};}
-  if(s.learn.length){s.learn.sort((a,b)=>a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
+  if(s.learn.length){s.learn.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
   return null;}
 function nextCard(){
-  const s=session;const p=pick();s.cur=p;s.answered=false;
+  const s=session;if(s.deadline&&Date.now()>s.deadline){s.rev=[];s.learn=[];}
+  const p=pick();s.cur=p;s.answered=false;
+  if(p){const it=p.key?itemOfKey(p.key):p.o?p.o.key:p.items&&p.items[0]?(p.items[0].key||p.items[0].a):null;if(it){s.recent=(s.recent||[]).concat([it]).slice(-4);}}
   mapS.hl=[];mapS.pins=[];mapS.labels=[];mapS.onTap=null;mapS.showNames=false;mapS.showDir=false;mapS.route=null;mapS.extraDraw=null;mapS.chk=null;hideMap(false);s.hint=false;$("v-study").classList.remove("exdone","exq","exmode");
   $("st-left").textContent=p?"Quedan "+remaining():"";
   if(!p){finish();return;}
   if(p.type==="intro")renderIntro(p.o);else if(p.type==="cintro")renderCIntro(p.items);else if(p.type==="bintro")renderBIntro(p.g,p.items,p.part,p.parts,p.prev);else renderCard(p);
 }
-const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito · con mapa"],["hC","Calle del hito · sin mapa"],["jc","Conexiones · con mapa"],["jC","Conexiones · sin mapa"],["rt","Recorrido de vías"]];
+const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito · con mapa"],["hC","Calle del hito · sin mapa"],["jc","Conexiones · con mapa"],["jC","Conexiones · sin mapa"],["vf","Verdadero o falso · giros"],["rp","Ruta paso a paso"],["rt","Recorrido de vías"]];
 const PRANS=[["auto","Según conocimiento"],["mix","Normal"]];
 const PR=Object.assign({types:["sn","su","hn","hu","hc"],zones:G.map((_,i)=>i),bars:[],zm:"b",ans:"auto",seen:true,fails:false,n:20,v:2,rlen:[3]},lsGet("prac")||{});if(!Array.isArray(PR.rlen)||!PR.rlen.length)PR.rlen=[3];if(PR.v!==2){PR.zones=G.map((_,i)=>i);PR.v=2;}if(PR.v<3){PR.v=3;PR.zm="b";PR.bars=BG.map((_,i)=>i);PR.ans="auto";if(![5,10,20].includes(PR.n))PR.n=10;}if(PR.ans!=="auto"&&PR.ans!=="mix")PR.ans="mix";
 PR.rlen=PR.rlen.flatMap(v=>v==="ex"?["ex1","ex2","ex3"]:[v]);
@@ -1054,11 +1061,13 @@ function prPool(){const out=[];for(const o of [...S,...H]){if(!prIn(o))continue;
       out.push(o.key+c);}}}
   for(const t of ["jc","jC"]){if(!PR.types.includes(t))continue;for(const c of CN){const A=cnA(c);if(!A||!prIn(A))continue;if(PR.seen&&!connReady(c))continue;
     if(PR.fails){const cc=ST.cards["j"+c.i+"j"];if(!cc||(cc[4]<1&&cc[2]>=230))continue;}out.push("j"+c.i+(t==="jC"?"J":"j"));}}
+  if(PR.types.includes("vf"))for(const c of CN){if(c.a[0]!=="s"||c.k===3)continue;const A=cnA(c);if(!A||!prIn(A))continue;if(PR.seen&&!connReady(c))continue;out.push("j"+c.i+"V");}
+  if(PR.types.includes("rp"))EX.forEach((q,i)=>{if(q.o[q.c].length>10)return;const A=q.at==="s"?S.find(x=>x.n===q.a):H.find(h=>h.n===q.a);if(A&&!prIn(A))return;out.push("p"+i+"p");});
   if(PR.types.includes("rt")){const fails=lsGet("rtf")||{};TR.forEach((q,i)=>{if(!q||!PR.rlen.includes(q.s.length))return;const B=byKey["s"+q.s[Math.min(1,q.s.length-1)]];if(!B||!prIn(B))return;
     if(PR.seen&&!q.s.every(id=>introduced(byKey["s"+id])))return;if(PR.fails&&!fails[i])return;out.push("r"+i+"t");});}
   if(PR.types.includes("rt")&&PR.rlen.some(v=>String(v).startsWith("ex"))){const fx=lsGet("exf3")||{};EX.forEach((q,i)=>{if(!PR.rlen.includes(exBand(q)))return;const A=q.at==="s"?S.find(x=>x.n===q.a):H.find(h=>h.n===q.a);if(A&&!prIn(A))return;if(PR.fails&&!fx[i])return;out.push("e"+i+"e");});}
   return out;}
-function renderPrac(){if(!CN.length)loadCN().then(()=>{if(CN.length&&$("v-prac").classList.contains("on"))renderPrac();});if(!EX.length&&PR.rlen.some(v=>String(v).startsWith("ex")))loadEX();
+function renderPrac(){if(PR.types.includes("rp")&&!EX.length)loadEX();if(!CN.length)loadCN().then(()=>{if(CN.length&&$("v-prac").classList.contains("on"))renderPrac();});if(!EX.length&&PR.rlen.some(v=>String(v).startsWith("ex")))loadEX();
   const mk=(box,list,isOn,toggle)=>{const e=$(box);e.innerHTML="";list.forEach(([v,l])=>{const b=document.createElement("button");b.className="chip"+(isOn(v)?" on":"");b.textContent=l;b.onclick=()=>{toggle(v);lsSet("prac",PR);renderPrac();};e.appendChild(b);});};
   const tg=(arr,v)=>{const i=arr.indexOf(v);if(i>=0)arr.splice(i,1);else arr.push(v);};
   mk("pr-types",PT,v=>PR.types.includes(v),v=>tg(PR.types,v));
@@ -1071,8 +1080,8 @@ function renderPrac(){if(!CN.length)loadCN().then(()=>{if(CN.length&&$("v-prac")
   for(const b of $("pr-zm").children)b.classList.toggle("on",b.dataset.m===PR.zm);
   mk("pr-ans",PRANS,v=>PR.ans===v,v=>{PR.ans=v;});
   $("pr-ans-n").textContent=PR.ans==="auto"?"Según lo que sepas de cada una: 4 opciones si aún la estás aprendiendo y escribir cuando ya la sabes.":"Va alternando: una pregunta eligiendo entre 4 y la siguiente escribiendo el nombre. (No afecta a los recorridos de examen, que siempre son de 3 opciones.)";
-  const custom=![5,10,20].includes(PR.n);
-  mk("pr-n",[[5,"5"],[10,"10"],[20,"20"],[0,custom?"Otro: "+PR.n:"Otro…"]],v=>v?PR.n===v:custom,v=>{if(v)PR.n=v;else{if(!custom)PR.n=30;setTimeout(()=>{const i=$("pr-nc");i.focus();i.select();},50);}});
+  const custom=![5,10,20,"t"].includes(PR.n);
+  mk("pr-n",[[5,"5"],[10,"10"],[20,"20"],["t","⏱ 60 s"],[0,custom?"Otro: "+PR.n:"Otro…"]],v=>v?PR.n===v:custom,v=>{if(v)PR.n=v;else{if(!custom)PR.n=30;setTimeout(()=>{const i=$("pr-nc");i.focus();i.select();},50);}});
   $("pr-nc-box").style.display=custom?"flex":"none";if(document.activeElement!==$("pr-nc"))$("pr-nc").value=PR.n;
   mk("pr-rlen",[[2,"2 vías"],[3,"3 vías"],[4,"4 vías"],[5,"5 vías"],["ex1","Examen 5-10 vías"],["ex2","Examen 10-15 vías"],["ex3","Examen 15-20 vías"]],v=>PR.rlen.includes(v),v=>{tg(PR.rlen,v);if(!PR.rlen.length)PR.rlen.push(v);});
   $("pr-rlen-box").style.display=PR.types.includes("rt")?"flex":"none";
@@ -1089,12 +1098,19 @@ $("pr-tnone").onclick=()=>{PR.types=[];lsSet("prac",PR);renderPrac();};
 for(const b of $("pr-zm").children)b.onclick=()=>{PR.zm=b.dataset.m;lsSet("prac",PR);renderPrac();};
 $("pr-nc").oninput=()=>{const v=Math.round(+$("pr-nc").value);if(v>=1){PR.n=Math.min(500,v);lsSet("prac",PR);const t=$("pr-n").lastChild;if(t)t.textContent=[5,10,20].includes(PR.n)?"Otro…":"Otro: "+PR.n;}};
 $("pr-nc").onblur=()=>renderPrac();
-$("pr-go").onclick=()=>{const keys=shuffle(prPool()).slice(0,PR.n);if(!keys.length)return;
-  session={practice:true,rev:keys,learn:[],news:[],n:0,sinceNew:0,cur:null,answered:false,done:0,ok:0,total:keys.length};refreshKnown();show("study");nextCard();};
+$("pr-go").onclick=()=>{const timed=PR.n==="t";let pool=shuffle(prPool());
+  /* verdadero o falso de giros: más peso a los giros a la izquierda */
+  if(PR.types.includes("vf")){const L=pool.filter(k=>k.endsWith("V"));const left=L.filter(k=>{const c=CNI.get(+k.slice(1,-1));return c&&c.k===1;});pool=shuffle(pool.concat(left,left));pool=pool.filter((k,i)=>pool.indexOf(k)===i||k.endsWith("V"));}
+  const keys=pool.slice(0,timed?400:PR.n);if(!keys.length)return;
+  session={practice:true,rev:keys,learn:[],news:[],n:0,sinceNew:0,cur:null,answered:false,done:0,ok:0,total:timed?"∞":keys.length,deadline:timed?Date.now()+60000:0};refreshKnown();show("study");nextCard();
+  if(timed){clearInterval(window._tmr);window._tmr=setInterval(()=>{if(!session||!session.deadline){clearInterval(window._tmr);return;}const l=Math.max(0,Math.ceil((session.deadline-Date.now())/1000));$("st-left").textContent="⏱ "+l+" s";if(!l){clearInterval(window._tmr);}},250);}};
 function finish(){
   if(session.practice){$("st-tag").textContent="Fin";$("st-tag").className="tag";
     const pc=Math.round(100*session.ok/Math.max(1,session.done)),hf=session.half||0,bien=session.ok-hf/2,mal=session.done-bien-hf;
-    $("prompt").innerHTML='<div class="q">Práctica terminada</div><div class="res-big '+(pc>=80?"ok":pc>=50?"warn":"bad")+'">'+pc+' %</div><div class="extra">'+(pc>=90?"¡Muy bien! Esto lo tienes.":pc>=70?"Bien. Repasa en el mapa las que has fallado.":pc>=50?"Vas por buen camino; dale otra ronda.":"Toca repasar esta zona con calma.")+'</div>';
+    if(session.deadline){const best=lsGet("crBest")||0;if(session.ok>best)lsSet("crBest",session.ok);}
+    const rec=session.deadline?'<div class="extra">Contrarreloj: <b>'+session.ok+'</b> aciertos en 60 s'+((lsGet("crBest")||0)<=session.ok?' · ¡récord!':' · récord '+lsGet("crBest"))+'</div>':'';
+    const run=(session.bestRun||0)>=3?'<div class="extra">Mejor racha: '+session.bestRun+' 🔥</div>':'';
+    $("prompt").innerHTML=rec+run+'<div class="q">Práctica terminada</div><div class="res-big '+(pc>=80?"ok":pc>=50?"warn":"bad")+'">'+pc+' %</div><div class="extra">'+(pc>=90?"¡Muy bien! Esto lo tienes.":pc>=70?"Bien. Repasa en el mapa las que has fallado.":pc>=50?"Vas por buen camino; dale otra ronda.":"Toca repasar esta zona con calma.")+'</div>';
     $("panel").innerHTML='<div class="cele-stats res"><div><b style="color:var(--ok)">'+bien+'</b><span>bien</span></div><div><b style="color:var(--warn)">'+hf+'</b><span>casi</span></div><div><b style="color:var(--bad)">'+mal+'</b><span>mal</span></div></div><button class="btn primary block" id="b-again">Otra ronda</button><button class="btn block" id="b-fin">Volver</button>';
     mapS.fit(CITY,0);$("b-fin").onclick=exitStudy;$("b-again").onclick=()=>{session=null;$("pr-go").onclick();};return;}
   $("st-tag").textContent="Fin";$("st-tag").className="tag";$("prompt").innerHTML="";
@@ -1107,7 +1123,10 @@ function finish(){
 function exitStudy(){const pr=session&&session.practice,rv=session&&session.review,bk=session&&session.back;session=null;mapS.rvLines=null;mapS.rvSign=null;mapS.showLanes=false;flush();refreshKnown();renderHome();show(bk||(rv?"set":pr?"prac":"home"));if(sbUser)sbSync();}
 function grade(key,res,lr){
   mapS.showNames=true;mapS.draw(); /* res: 2 bien, 1 casi, 0 mal */
-  if(session.practice){session.done++;if(res===2)session.ok++;else if(res===1){session.ok+=0.5;session.half=(session.half||0)+1;}return;}
+  if(session.practice){session.done++;if(res===2)session.ok++;else if(res===1){session.ok+=0.5;session.half=(session.half||0)+1;}
+    session.streak=res===2?(session.streak||0)+1:0;session.bestRun=Math.max(session.bestRun||0,session.streak);
+    {const t=$("st-tag");t.textContent=t.textContent.replace(/ · racha.*$/,"")+(session.streak>=3?" · racha "+session.streak+" 🔥":"");}
+    return;}
   const s=session,t=dayNum();let c=ST.cards[key];if(!c)c=ST.cards[key]=[t,0,230,0,0,0];
   s.done++;ST.meta.dRev++;
   const wasRev=c[3]>0&&!(lr&&lr.re);
@@ -1115,8 +1134,8 @@ function grade(key,res,lr){
     const lv=c[6]||1;if(res===2&&!s.hint){c[7]=(c[7]||0)+1;if(lv===1&&c[7]>=2){c[6]=2;c[7]=0;s.lvUp=(s.lvUp||0)+1;}}else if(res===0){if(lv===2){c[6]=1;c[7]=1;}else c[7]=0;}else if(!c[6])c[6]=1;}
   if(c[3]===0){ // aprendizaje
     const l=lr||{key,at:0,step:0};
-    if(res===2){l.step++;if(l.step>=2){c[3]=1;c[1]=1;c[0]=t+1;}else{l.at=s.n+6;s.learn.push(l);}}
-    else{l.step=res===1?l.step:0;l.at=s.n+3;s.learn.push(l);}
+    if(res===2){l.step++;if(l.step>=2){c[3]=1;c[1]=1;c[0]=t+1;}else{l.at=s.n+8;s.learn.push(l);}}
+    else{l.step=res===1?l.step:0;l.at=s.n+5;s.learn.push(l);}
   }else if(lr&&lr.re){ // reaprendizaje dentro de la sesión
     if(res!==2){lr.at=s.n+3;s.learn.push(lr);}
   }else{
@@ -1191,12 +1210,26 @@ function renderRoute(key){
     grade(key,ok?2:half?1:0,null);},t=>q.t!=="ok"&&t!=="Correcto");
 }
 function renderCard(p){
+  if(p.key[0]==="j"&&p.key.endsWith("V")){renderVF(p);return;}
+  if(p.key[0]==="p"){renderStep(p);return;}
   if(p.key[0]==="j"){renderConn(p);return;}
   if(p.key[0]==="r"){renderRoute(p.key);return;}
   if(p.key[0]==="e"){renderExam(p.key);return;}
   const key=p.key,o=byKey[key.slice(0,-1)],nomap=key.slice(-1)==="C",type=key.slice(-1).toLowerCase();
   if(!o){nextCard();return;}
   if(session.practice){$("st-tag").textContent="Práctica · "+(session.done+1)+"/"+session.total;$("st-tag").className="tag";}else $("st-tag").textContent=(ST.cards[key]&&ST.cards[key][3]>0&&!(p.learn&&p.learn.re))?"Repaso":"Aprendiendo";$("st-tag").className="tag";
+  if(type==="n"&&o.kind==="s"&&!p.learn&&ST.cards[key]&&ST.cards[key][3]>0&&CN.length&&Math.random()<.4){
+    /* variante: con qué vía se cruza la resaltada (aprender alrededores) */
+    const linked=[...cnLinked("s"+o.i)].filter(n=>n!==o.n);
+    const ovA=(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n);
+    if(linked.length){const right=linked[Math.floor(Math.random()*linked.length)],ex=new Set([o.n,...linked,...ovA]);
+      const ds=shuffle(nearest(o,S,14).filter(x=>!ex.has(x.n))).slice(0,3).map(x=>x.n);
+      if(ds.length>=2){const B=S.find(x=>x.n===right);
+        $("prompt").innerHTML='<div class="q">¿Con cuál de estas vías se cruza o enlaza la vía resaltada?</div>';
+        mapS.hl=[{s:o,color:COL.target}];mapS.fit(o.b,spanOf(o,1.7,320));
+        options(shuffle(ds.concat([right])),right,ok=>{mapS.hl=[{s:o,color:COL.target},{s:B,color:COL.ok||"#16a34a"}];mapS.labels=[{s:o,force:true},{s:B,force:true}];mapS.fit([Math.min(o.b[0],B.b[0]),Math.min(o.b[1],B.b[1]),Math.max(o.b[2],B.b[2]),Math.max(o.b[3],B.b[3])],400);
+          $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">La resaltada es <b>'+esc(o.n)+"</b>.</div>");grade(key,ok?2:0,p.learn);});
+        return;}}}
   if(type==="n"){
     const ovN=o.kind==="s"?(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n):[];
     const pool=o.kind==="s"?S:H,sim=simTo(o.n,pool,[o.n].concat(ovN)).slice(0,1),near_=shuffle(nearest(o,pool,8).filter(x=>!sim.includes(x)&&!ovN.includes(x.n))).slice(0,3-sim.length),opts=shuffle(sim.concat(near_).concat([o]));
@@ -1343,6 +1376,52 @@ function renderConn(p){
   }
 }
 
+
+/* ---------- verdadero o falso de giros (sobre todo a la izquierda) ---------- */
+function renderVF(p){
+  const key=p.key,c=CNI.get(+key.slice(1,-1));if(!c){nextCard();return;}const A=cnA(c),B=cnB(c);if(!A||!B){nextCard();return;}
+  $("st-tag").textContent="Práctica · "+(session.done+1)+"/"+session.total+(session.streak>=3?" · racha "+session.streak+" 🔥":"");$("st-tag").className="tag";
+  const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha",4:"tomar la salida"}[c.k]||KTX[c.k];
+  $("prompt").innerHTML='<div class="q">¿Verdadero o falso?</div><div class="placa" style="font-size:18px;line-height:1.3;padding:8px 12px;text-align:left">Por <b>'+esc(A.n)+'</b> en sentido <b>'+DIRN[c.h]+'</b> se puede '+verb+' hacia <b>'+esc(B.n)+'</b>.</div>';
+  hideMap(true);
+  options(["Verdadero","Falso"],c.s===0?"Verdadero":"Falso",ok=>{hideMap(false);mapS.resize();
+    mapS.hl=[{s:A,color:COL.target,w:2.4},{s:B,color:cnCol(c.s),w:2.6}];mapS.labels=[{s:A,force:true},{s:B,force:true}];
+    mapS.extraDraw=cx=>{cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,cnCol(c.s));};
+    const b=[1e9,1e9,-1e9,-1e9];for(const q of cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],330);
+    $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");grade(key,ok?2:0,null);});
+}
+/* ---------- ruta paso a paso: de A a B eligiendo en cada vía por dónde seguir ---------- */
+function renderStep(p){
+  const key=p.key,q=EX[+key.slice(1,-1)];if(!q){nextCard();return;}
+  const route=q.o[q.c].map(id=>byKey["s"+id]).filter(Boolean);if(route.length<2){nextCard();return;}
+  const st={i:0,err:0};
+  const endTxt=(q.bt==="s"?"la vía ":"")+q.b,dest=q.bt==="s"?S.find(z=>z.n===q.b):H.find(z=>z.n===q.b);
+  const step=()=>{
+    session.answered=false;const cur=route[st.i],nxt=route[st.i+1];
+    $("st-tag").textContent="Ruta · paso "+(st.i+1)+"/"+(route.length-1)+(session.practice?" · "+(session.done+1)+"/"+session.total:"");$("st-tag").className="tag";
+    $("prompt").innerHTML='<div class="q">De <b>'+esc(q.a)+'</b> a <b>'+esc(q.b)+'</b></div><div class="extra">Vas por <b>'+esc(cur.n)+'</b>. ¿Por qué vía sigues?</div>';
+    mapS.hl=route.slice(0,st.i).map(o=>({s:o,color:"#9ca3af",w:2})).concat([{s:cur,color:COL.target,w:2.6}]);
+    mapS.labels=[{s:cur,force:true}];mapS.pins=[];if(dest&&dest.x!=null)mapS.pins=[{x:dest.x,y:dest.y,color:COL.pin,label:dest.n}];else if(dest)mapS.hl.push({s:dest,color:"#7c3aed",w:2});
+    mapS.fit(cur.b,spanOf(cur,1.6,500));
+    const lk=[...cnLinked("s"+cur.i)].filter(n=>n!==cur.n&&n!==nxt.n&&!route.slice(0,st.i).some(o=>o.n===n));
+    const ex=new Set([cur.n,nxt.n,...route.slice(0,st.i).map(o=>o.n),...(OVL[nxt.i]||[]).concat(ALI[nxt.i]||[]).map(i=>(byKey["s"+i]||{}).n)]);
+    let ds=shuffle(lk.filter(n=>!ex.has(n))).slice(0,2);if(ds.length<2)ds=ds.concat(shuffle(nearest(cur,S,10).map(x=>x.n).filter(n=>!ex.has(n)&&!ds.includes(n))).slice(0,2-ds.length));
+    options(shuffle(ds.concat([nxt.n])),nxt.n,ok=>{if(!ok)st.err++;
+      mapS.hl=route.slice(0,st.i+1).map(o=>({s:o,color:"#9ca3af",w:2})).concat([{s:nxt,color:ok?(COL.ok||"#16a34a"):"#dc2626",w:2.6}]);mapS.labels=[{s:cur,force:true},{s:nxt,force:true}];mapS.draw();
+      st.i++;const last=st.i>=route.length-1;
+      const btn=document.createElement("button");btn.className="btn primary block";btn.textContent=last?"Ver la ruta completa":"Siguiente paso";
+      setTimeout(()=>{for(const x of [...$("panel").querySelectorAll("button")])if(x.textContent==="Siguiente")x.remove();$("panel").appendChild(btn);},0);
+      btn.onclick=()=>{btn.remove();if(!last){step();return;}
+        $("prompt").innerHTML='<div class="q">Ruta completa'+(st.err?' · '+st.err+' fallo'+(st.err>1?'s':''):' · ¡sin fallos!')+'</div><div class="extra">'+esc(exText(q,q.o[q.c]))+'</div>';
+        mapS.hl=route.map(o=>({s:o,color:COL.target,w:2.2}));mapS.labels=route.map(o=>({s:o,force:true}));
+        const b=[1e9,1e9,-1e9,-1e9];for(const o of route){b[0]=Math.min(b[0],o.b[0]);b[1]=Math.min(b[1],o.b[1]);b[2]=Math.max(b[2],o.b[2]);b[3]=Math.max(b[3],o.b[3]);}mapS.fit(b,600);
+        const its=exItems(q,q.o[q.c]);ensureTiles(itemsBox(its)).then(()=>checkRoute(its,false)).then(R=>{R.items=its;drawChk(mapS,R);mapS.draw();}).catch(()=>{});
+        grade(key,st.err===0?2:st.err===1?1:0,null);
+        const nx=document.createElement("button");nx.className="btn primary block";nx.textContent="Siguiente";nx.onclick=nextCard;$("panel").innerHTML="";$("panel").appendChild(nx);};
+    });
+  };
+  step();
+}
 
 /* ---------- recorridos tipo examen: 3 opciones entre dos hitos ---------- */
 /* las preguntas de examen van en un archivo aparte (ex.json) para que la app cargue rápido */
