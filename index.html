@@ -892,7 +892,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.87";
+const APPVER="0.88";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -2054,7 +2054,14 @@ function laneTap(x,y){if(!mapE.showLanes||mapE.k<0.45||!mapE.laneTiles)return fa
   const run=streetRun(app);mapE.hl=[];mapE.labels=[];mapE.focus=app;mapE.focusRun=run;mapE.draw();
   const fmt=(a,e)=>KINDTXT[e.kind]+(e.name&&e.name!==a.name?" a "+e.name:e.kind===0?" por "+(e.name||a.name):e.name?"":" (vía sin nombre)")+(e.lab?" ("+e.lab+")":"");
   const box=$("info");box.style.display="block";
-  const ok=app.ex.filter(e=>e.st===0),no=app.ex.filter(e=>e.st!==0&&e.st!==4&&e.st!==5&&showEx(e)),mb=app.ex.filter(e=>e.st===4),em=app.ex.filter(e=>e.st===5);
+  /* en el texto solo los giros de este cruce: el giro tiene que empezar a menos de 45 m de la llegada */
+  const U=NODE.get(app.u),N0=NODE.get(app.n);
+  const here=e=>{if(!U||!N0)return true;let px=N0[0]-U[0],py=N0[1]-U[1],prev=N0,d=0;
+    for(const id of e.p){const P=NODE.get(id);if(!P)break;const vx=P[0]-prev[0],vy=P[1]-prev[1],l=Math.hypot(vx,vy);if(!l)continue;
+      const c=(px*vx+py*vy)/((Math.hypot(px,py)||1)*l);if(c<0.82)return d<=45;d+=l;if(d>45)return e.kind===0;px=vx;py=vy;prev=P;}
+    return true;};
+  const exH=app.ex.filter(here);
+  const ok=exH.filter(e=>e.st===0),no=exH.filter(e=>e.st!==0&&e.st!==4&&e.st!==5&&showEx(e)),mb=exH.filter(e=>e.st===4),em=exH.filter(e=>e.st===5);
   let h=esc("Llegando por "+(app.name||"esta vía"))+"<small>"+(ok.length?"<span style='color:var(--go)'>✓ Puedes "+esc(ok.map(e=>fmt(app,e)).join(" · "))+"</span>":"")+(no.length?"<br><span style='color:var(--no)'>✗ No puedes "+esc(no.map(e=>fmt(app,e)+" ("+STTXT[e.st]+")").join(" · "))+"</span>":"")+(mb.length?"<br><span style='color:var(--warn)'>? Posiblemente no puedes "+esc(mb.map(e=>fmt(app,e)).join(" · "))+" (señal sin confirmar)</span>":"")+(em.length?"<br><span style='color:var(--emt)'>🚌 Solo EMT: "+esc(em.map(e=>fmt(app,e)).join(" · "))+". Un turismo no puede; un vehículo prioritario sí.</span>":"")+"</small>";
   /* señales sin confirmar junto a este cruce: avisar y dejar revisarlas */
   const Jn=NODE.get(app.n);const near=Jn?SG.map((g,i)=>[g,i]).filter(([g])=>(g[3]===2||g[3]===3||g[3]===4)&&Math.hypot(g[0]-Jn[0],g[1]-Jn[1])<45):[];
