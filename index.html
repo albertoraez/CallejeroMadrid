@@ -892,7 +892,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.83";
+const APPVER="0.84";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1559,6 +1559,12 @@ function matchStreet(inp,name){const u=parseNm(inp),e=parseNm(name);if(!u.core)r
   if(!u.ty&&same.length)return{r:1,why:"varias",typo};
   return{r:2,typo};}
 function matchHito(inp,name){const u=parseNm(inp,false),e=parseNm(name,false);if(!u.core)return{r:0};
+  /* parques de bomberos: vale con poner bien el número o el distrito */
+  const pm=name.match(/^Parque de Bomberos\s+0*(\d+)\s*(.*)$/i);
+  if(pm){const raw=nrm(inp),num=(raw.match(/\d+/)||[])[0],dw=parseNm(pm[2]||"",false).w.filter(w=>w.length>2);
+    const okNum=num!=null&&+num===+pm[1],okDis=dw.length&&dw.every(y=>u.w.some(x=>lev(x,y)<=tolOf(y.length)));
+    if((okNum&&(okDis||!/[a-z]{4,}/.test(raw.replace(/parque|bomberos?|de|del|n[uú]mero|num|no/g,"")))) || (okDis&&(num==null||+num===+pm[1])))return{r:2};
+    if(num!=null&&+num!==+pm[1])return{r:0};}
   const L=Math.max(u.core.length,e.core.length),rat=1-lev(u.core,e.core)/L;if(rat>=.85)return{r:2,typo:rat<1};
   const hit=e.w.filter(y=>u.w.some(x=>lev(x,y)<=tolOf(y.length))).length/e.w.length,extra=u.w.filter(x=>!e.w.some(y=>lev(x,y)<=tolOf(y.length))).length;
   if(hit>=.99&&!extra)return{r:2,typo:true};if(hit>=.5&&extra<=1)return{r:1,why:"incompleto"};return{r:0};}
