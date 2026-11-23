@@ -616,6 +616,12 @@ function distTo(s,x,y){if(inPoly(s,x,y))return 0;let m=1e18;for(const a of s.R){
 function streetAt(x,y,tol){let best=null,bd=tol;for(const s of S){const b=s.b;if(x<b[0]-tol||x>b[2]+tol||y<b[1]-tol||y>b[3]+tol)continue;const d=distTo(s,x,y);if(d<bd||(d===0&&best&&s.imp<best.imp)){bd=d;best=s;}}return best;}
 const d2=(a,b)=>{const dx=a[0]-b[0],dy=a[1]-b[1];return dx*dx+dy*dy;};
 function nearest(o,list,n){return list.filter(x=>x!==o&&x.n!==o.n).map(x=>[d2(x.c,o.c),x]).sort((a,b)=>a[0]-b[0]).slice(0,n).map(x=>x[1]);}
+function touches(a,b,tol=15){
+  if(a.b[0]>b.b[2]+tol||b.b[0]>a.b[2]+tol||a.b[1]>b.b[3]+tol||b.b[1]>a.b[3]+tol)return false;
+  const t2=tol*tol;
+  const near=(p,q)=>{for(const ra of p.R)for(let i=0;i<ra.length;i+=2){const x=ra[i],y=ra[i+1];if(x<q.b[0]-tol||x>q.b[2]+tol||y<q.b[1]-tol||y>q.b[3]+tol)continue;
+    for(const rb of q.R){const n=rb.length;for(let j=0;j<n;j+=2){const x1=rb[j],y1=rb[j+1],x2=rb[(j+2)%n],y2=rb[(j+3)%n],dx=x2-x1,dy=y2-y1,L=dx*dx+dy*dy;let t=L?((x-x1)*dx+(y-y1)*dy)/L:0;t=t<0?0:t>1?1:t;const ex=x1+t*dx-x,ey=y1+t*dy-y;if(ex*ex+ey*ey<t2)return true;}}}return false;};
+  return near(a,b)||near(b,a);}
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
 const fmtD=m=>m<1000?Math.round(m/10)*10+" m":(m/1000).toFixed(1).replace(".",",")+" km";
 
@@ -886,7 +892,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.82";
+const APPVER="0.83";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1232,12 +1238,14 @@ function renderCard(p){
   if(type==="u"&&o.kind==="s"&&isRev&&vr<.4&&cardLetters(o,key,p))return;
   if(type==="n"&&o.kind==="s"&&isRev&&CN.length&&vr>=.34&&vr<.62){
     /* variante: con qué vía se cruza la resaltada (aprender alrededores) */
-    const linked=[...cnLinked("s"+o.i)].filter(n=>n!==o.n);
+    /* solo vías que tocan de verdad la resaltada (cruce directo, no enlaces lejanos) */
+    const ovS=new Set((OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n));
+    const linked=[...new Set(CN.filter(c=>c.a==="s"+o.i&&c.s===0&&c.k!==4).map(c=>cnB(c)).filter(B=>B&&B.n!==o.n&&touches(o,B)).map(B=>B.n).concat(nearest(o,S,24).filter(x=>x.n!==o.n&&!ovS.has(x.n)&&touches(o,x)).map(x=>x.n)))];
     const ovA=(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n);
     if(linked.length){const right=linked[Math.floor(Math.random()*linked.length)],ex=new Set([o.n,...linked,...ovA]);
-      const ds=shuffle(nearest(o,S,14).filter(x=>!ex.has(x.n))).slice(0,3).map(x=>x.n);
+      const ds=shuffle(nearest(o,S,18).filter(x=>!ex.has(x.n)&&!touches(o,x,40))).slice(0,3).map(x=>x.n);
       if(ds.length>=2){const B=S.find(x=>x.n===right);
-        $("prompt").innerHTML='<div class="q">¿Con cuál de estas vías se cruza o enlaza la vía resaltada?</div>';
+        $("prompt").innerHTML='<div class="q" style="font-size:20px">¿Con qué vía <u>SE CRUZA</u> o <u>ENLAZA</u>?</div><div class="placa">'+esc(o.n)+'</div><div class="extra">No te pregunto qué vía es: te digo cuál es la resaltada y tienes que elegir la que se cruza con ella.</div>';
         mapS.hl=[{s:o,color:COL.target}];mapS.fit(o.b,spanOf(o,1.7,320));
         options(shuffle(ds.concat([right])),right,ok=>{mapS.hl=[{s:o,color:COL.target},{s:B,color:COL.ok||"#16a34a"}];mapS.labels=[{s:o,force:true},{s:B,force:true}];mapS.fit([Math.min(o.b[0],B.b[0]),Math.min(o.b[1],B.b[1]),Math.max(o.b[2],B.b[2]),Math.max(o.b[3],B.b[3])],400);
           $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">La resaltada es <b>'+esc(o.n)+"</b>.</div>");grade(key,ok?2:0,p.learn);});
