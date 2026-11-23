@@ -892,7 +892,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.84";
+const APPVER="0.85";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1228,19 +1228,28 @@ function renderCard(p){
   /* repasos de vías: varios tipos de pregunta para que no sea siempre lo mismo */
   const isRev=!p.learn&&ST.cards[key]&&ST.cards[key][3]>0&&!session.practice;
   const vr=Math.random();
-  if(type==="n"&&o.kind==="s"&&isRev&&CN.length&&vr<.22&&cardVF(o,key,p))return;
-  if(type==="n"&&o.kind==="s"&&isRev&&[1,2,4].includes(o.ow)&&vr>=.22&&vr<.34){
+  /* tipo de pregunta para los repasos: al azar con pesos, sin repetir el mismo tipo seguido */
+  let pv="cls";
+  if(type==="n"&&o.kind==="s"&&isRev){
+    const W=[["vf",.16],["sent",[1,2,4].includes(o.ow)?.1:0],["une",.15],["seg",.15],["cruce",.16],["cls",.28]].map(([k,w])=>[k,k===session.lastV?w*.15:w]);
+    let t=vr*W.reduce((a,b)=>a+b[1],0);for(const [k,w] of W){if(t<w){pv=k;break;}t-=w;}}
+  const setV=v=>{session.lastV=v;return true;};
+  if(pv==="vf"&&CN.length&&cardVF(o,key,p)&&setV("vf"))return;
+  if(pv==="une"&&cardUne(o,key,p)&&setV("une"))return;
+  if(pv==="seg"&&cardSeg(o,key,p)&&setV("seg"))return;
+  if(pv==="sent"){session.lastV="sent";
     const T={1:"Doble sentido",2:"Sentido único",4:"Doble sentido"};
     $("prompt").innerHTML='<div class="q">¿Cómo se circula por esta vía?</div><div class="placa">'+esc(o.n)+"</div>";
     hideMap(true);
     options(["Sentido único","Doble sentido"],T[o.ow],ok=>{hideMap(false);mapS.resize();mapS.hl=[{s:o,color:COL.target}];mapS.labels=[{s:o,force:true}];mapS.showDir=true;mapS.fit(o.b,spanOf(o,1.4,320));$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(OWTXT[o.ow])+"</div>");grade(key,ok?2:0,p.learn);});
     return;}
   if(type==="u"&&o.kind==="s"&&isRev&&vr<.4&&cardLetters(o,key,p))return;
-  if(type==="n"&&o.kind==="s"&&isRev&&CN.length&&vr>=.34&&vr<.62){
+  if(pv==="cruce"&&CN.length){
     /* variante: con qué vía se cruza la resaltada (aprender alrededores) */
     /* solo vías que tocan de verdad la resaltada (cruce directo, no enlaces lejanos) */
     const ovS=new Set((OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n));
-    const linked=[...new Set(CN.filter(c=>c.a==="s"+o.i&&c.s===0&&c.k!==4).map(c=>cnB(c)).filter(B=>B&&B.n!==o.n&&touches(o,B)).map(B=>B.n).concat(nearest(o,S,24).filter(x=>x.n!==o.n&&!ovS.has(x.n)&&touches(o,x)).map(x=>x.n)))];
+    session.lastV="cruce";
+    const linked=[...new Set(CN.filter(c=>c.a==="s"+o.i&&c.s===0&&c.k!==4).map(c=>cnB(c)).filter(B=>B&&B.n!==o.n&&touches(o,B)).map(B=>B.n).concat(nearest(o,S,24).filter(x=>x.n!==o.n&&!ovS.has(x.n)&&touches(o,x)).map(x=>x.n)))].filter(n=>{const B=S.find(x=>x.n===n);return B&&linkSeen(o,B);});
     const ovA=(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n);
     if(linked.length){const right=linked[Math.floor(Math.random()*linked.length)],ex=new Set([o.n,...linked,...ovA]);
       const ds=shuffle(nearest(o,S,18).filter(x=>!ex.has(x.n)&&!touches(o,x,40))).slice(0,3).map(x=>x.n);
@@ -1403,9 +1412,50 @@ function renderConn(p){
 }
 
 
+/* ¿ya has visto la conexión entre dos vías? (tarjeta de conexión vista, o ambas estudiadas si no hay tarjeta) */
+let PAIRS=null;
+function linkSeen(a,b){
+  if(!PAIRS){PAIRS=new Map();for(const c of CN){if(c.a[0]!=="s")continue;const k=c.a.slice(1)+"|"+c.b;if(!PAIRS.has(k))PAIRS.set(k,[]);PAIRS.get(k).push(c.i);}}
+  const ids=(PAIRS.get(a.i+"|"+b.i)||[]).concat(PAIRS.get(b.i+"|"+a.i)||[]);
+  if(ids.length)return ids.some(id=>ST.cards["j"+id+"j"]);
+  const st=x=>cardTypes(x).some(t=>(ST.cards[x.key+t]||[])[3]>0);return st(a)&&st(b);}
+function touchList(o,n){const ov=new Set((OVL[o.i]||[]).concat(ALI[o.i]||[]));return nearest(o,S,n||30).filter(x=>x!==o&&x.n!==o.n&&!ov.has(x.i)&&touches(o,x));}
+const cdist=(a,b)=>Math.hypot(a.c[0]-b.c[0],a.c[1]-b.c[1]);
+function uneOpts(o,X,Y){const both=x=>touches(x,X)&&touches(x,Y);
+  const pool=touchList(X,24).concat(touchList(Y,24)).filter(x=>x!==o&&x!==X&&x!==Y&&x.n!==o.n&&!both(x));
+  const ds=[...new Map(shuffle(pool).map(x=>[x.n,x])).values()].slice(0,3);
+  if(ds.length<3)for(const x of nearest(o,S,16))if(ds.length<3&&x!==o&&x!==X&&x!==Y&&x.n!==o.n&&!ds.includes(x)&&!both(x))ds.push(x);
+  return ds.length>=2?shuffle(ds.concat([o])):null;}
+function showUne(o,X,Y,key,p,q){
+  const opts=uneOpts(o,X,Y);if(!opts)return false;
+  $("prompt").innerHTML='<div class="q" style="font-size:19px">'+q+'</div>';
+  mapS.hl=[{s:X,color:"#1c7ed6",w:2.4},{s:Y,color:"#ae3ec9",w:2.4}];mapS.labels=[{s:X,force:true},{s:Y,force:true}];mapS.showNames=false;
+  mapS.fit([Math.min(X.b[0],Y.b[0],o.b[0]),Math.min(X.b[1],Y.b[1],o.b[1]),Math.max(X.b[2],Y.b[2],o.b[2]),Math.max(X.b[3],Y.b[3],o.b[3])].map((v,i)=>v+(i<2?-60:60)),400);
+  options(opts.map(x=>x.n),o.n,ok=>{mapS.hl.push({s:o,color:COL.ok||"#16a34a",w:2.6});mapS.labels.push({s:o,force:true});mapS.draw();grade(key,ok?2:0,p.learn);});
+  return true;}
+/* ¿Qué vía une X con Y? */
+function cardUne(o,key,p){
+  const sc=x=>(+x.imp||0)+(/^(Plaza|Glorieta|Puerta)/.test(x.n)?3:0)+Math.random()*1.5;
+  const T=touchList(o,90).filter(x=>linkSeen(o,x)).map(x=>[sc(x),x]).sort((a,b)=>b[0]-a[0]).slice(0,7).map(t=>t[1]);
+  for(let i=0;i<T.length;i++)for(let j=i+1;j<T.length;j++){const X=T[i],Y=T[j];
+    if(touches(X,Y,30)||cdist(X,Y)<120)continue;
+    return showUne(o,X,Y,key,p,'¿Qué vía une <b>'+esc(X.n)+'</b> con <b>'+esc(Y.n)+'</b>?');}
+  return false;}
+/* Vas por A y quieres llegar a C: ¿por qué vía sigues? (o es la del medio) */
+function cardSeg(o,key,p){
+  const fr=new Map();for(const c of CN)if(c.s===0&&c.k!==4&&c.a[0]==="s"){const A=cnA(c),B=cnB(c);if(!A||!B)continue;
+    if(B===o&&ST.cards["j"+c.i+"j"])fr.set(A.n,A);}
+  const to=CN.filter(c=>c.s===0&&c.k!==4&&c.a==="s"+o.i&&ST.cards["j"+c.i+"j"]).map(cnB).filter(Boolean);
+  const sc=x=>(+x.imp||0)+(/^(Plaza|Glorieta|Puerta)/.test(x.n)?3:0)+Math.random()*1.5,top=L=>L.map(x=>[sc(x),x]).sort((a,b)=>b[0]-a[0]).slice(0,6).map(t=>t[1]);
+  const As=top([...fr.values()]),Cs=top(to);
+  for(const A of As)for(const C of Cs){
+    if(A===C||A.n===C.n||touches(A,C,30))continue;
+    return showUne(o,A,C,key,p,'Vas por <b>'+esc(A.n)+'</b> y quieres llegar a <b>'+esc(C.n)+'</b>: ¿por qué vía tienes que seguir?');}
+  return false;}
+
 /* repaso: verdadero o falso de un giro desde esta vía (más a la izquierda) */
 function cardVF(o,key,p){
-  const L=CN.filter(c=>c.a==="s"+o.i&&[0,1,2].includes(c.k));if(!L.length)return false;
+  const L=CN.filter(c=>c.a==="s"+o.i&&[0,1,2].includes(c.k)&&ST.cards["j"+c.i+"j"]);if(!L.length)return false;
   const left=L.filter(c=>c.k===1),src=left.length&&Math.random()<.65?left:L,c=src[Math.floor(Math.random()*src.length)];
   const A=o,B=cnB(c);if(!B)return false;
   const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha"}[c.k];
