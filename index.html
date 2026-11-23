@@ -886,7 +886,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.81";
+const APPVER="0.82";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1300,6 +1300,8 @@ const DIRN=["norte","noreste","este","sureste","sur","suroeste","oeste","noroest
 const KTX=["seguir recto","girar a la izquierda","girar a la derecha","cambiar de sentido","tomar la salida"];
 const cnAppr=c=>[c.f].concat(c.q||[]).concat([[c.x,c.y]]);
 const cnPath=c=>c.p?cnAppr(c).concat(c.p.slice(1)):[c.f,[c.x,c.y],c.g];
+const cnFrom=c=>esc(cnA(c).n)+(c.cz?" ("+c.cz+")":"")+" hacia el "+DIRN[c.h];
+const cnGo=c=>c.e!=null?"ir a "+cnB(c).n+" dirección "+DIRN[c.e]+" ("+(c.k===1?"a la izquierda":"a la derecha")+")":KTX[c.k]+(c.k===4?" hacia ":" a ")+cnB(c).n;
 const cnAl=(L)=>(L||[]).map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n);
 const cnLinked=a=>{const o=new Set();for(const c of CN)if(c.a===a){const B=byKey["s"+c.b];if(B)o.add(B.n);for(const n of cnAl(c.ba))o.add(n);}return o;};
 const CNOPT=["Sí, girando a la izquierda","Sí, girando a la derecha","Sí, siguiendo recto","No, está prohibido"];
@@ -1320,23 +1322,27 @@ function cnArrow(c,pts,col,w,dash){if(pts.length<2)return;const P=pts.map(p=>map
   const a=P[P.length-2],b=P[P.length-1],ang=Math.atan2(b[1]-a[1],b[0]-a[0]),L=w*3.2+4;
   c.beginPath();c.moveTo(b[0]+Math.cos(ang)*2,b[1]+Math.sin(ang)*2);c.lineTo(b[0]-Math.cos(ang-.5)*L,b[1]-Math.sin(ang-.5)*L);c.lineTo(b[0]-Math.cos(ang+.5)*L,b[1]-Math.sin(ang+.5)*L);c.closePath();
   c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=1.5;c.stroke();c.restore();}
-function cnDot(c,x,y,col,txt){const q=mapS.toScreen(x,y);c.save();c.beginPath();c.arc(q[0],q[1],txt?9:6,0,7);c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=2;c.stroke();
+function cnDot(c,x,y,col,txt){const q=mapS.toScreen(x,y);c.save();c.beginPath();if(txt&&String(txt).length>1){const w=String(txt).length*3.6+6;c.moveTo(q[0]-w,q[1]-9);c.arcTo(q[0]+w+9,q[1]-9,q[0]+w+9,q[1]+9,9);c.arcTo(q[0]+w+9,q[1]+9,q[0]-w-9,q[1]+9,9);c.arcTo(q[0]-w-9,q[1]+9,q[0]-w-9,q[1]-9,9);c.arcTo(q[0]-w-9,q[1]-9,q[0]+w,q[1]-9,9);c.closePath();}else c.arc(q[0],q[1],txt?9:6,0,7);c.fillStyle=col;c.fill();c.strokeStyle="#fff";c.lineWidth=2;c.stroke();
   if(txt){c.fillStyle="#fff";c.font="bold 11px system-ui,sans-serif";c.textAlign="center";c.textBaseline="middle";c.fillText(txt,q[0],q[1]+.5);}c.restore();}
 const cnCol=s=>s===0?(COL.ok||"#16a34a"):"#dc2626";
 function cnWhy(c){const A=cnA(c),B0=cnB(c),al=cnAl(c.ba),B={n:B0.n+(al.length?" (en ese tramo también se llama "+al.join(" / ")+")":"")};
   if(c.a[0]==="h"){const V=cnV(c);return "Saliendo de "+A.n+" por "+V.n+" hacia el "+DIRN[c.h]+", la primera vía del temario es "+B.n+" (a "+fmtD(c.d)+"). Allí puedes "+c.k.map(k=>KTX[k]).join(" o ")+".";}
-  const base="Por "+A.n+" hacia el "+DIRN[c.h]+", "+KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n;
+  const base="Por "+A.n+(c.cz?" ("+c.cz+")":"")+" hacia el "+DIRN[c.h]+", "+(c.e!=null?"ir a "+B.n+" dirección "+DIRN[c.e]+" ("+(c.k===1?"a la izquierda":"a la derecha")+")":KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n);
+  if(c.e!=null)return c.s===0?base+": se puede.":base+": no se puede.";
   return c.s===0?base+": se puede.":c.s===2?base+": giro prohibido.":base+": no se puede, "+B.n+" va en sentido contrario (dirección prohibida).";}
 /* presentación de 1 a 3 conexiones de la misma vía o hito */
 function renderCIntro(items){
   const s=session,t=dayNum();items.forEach((c,i)=>{const k="j"+c.i+"j";if(!ST.cards[k]){ST.cards[k]=[t,0,230,0,0,nowMin(),1,0];touch(k);}ST.meta.dCon=(ST.meta.dCon||0)+1;s.learn.push({key:k,at:s.n+2+i*3,step:0});});touchMeta();
   const c0=items[0],A=cnA(c0),isH=c0.a[0]==="h",V=isH?cnV(c0):A;
   $("st-tag").textContent="Conexiones";$("st-tag").className="tag new";
-  $("prompt").innerHTML='<div class="q">'+(isH?"Saliendo de":"Desde")+" "+esc(A.n)+'</div><div class="extra">'+(isH?"La primera vía del temario a la que llegas por "+esc(V.n)+" en cada sentido.":"A qué vías del temario puedes pasar (en verde) y a cuáles no (en rojo).")+'</div><div class="cn-list">'+items.map((c,i)=>'<div class="cn-it" style="--cc:'+ICOL[i%ICOL.length]+'"><b>'+(i+1)+'</b><span>'+esc(cnWhy(c))+'</span></div>').join("")+"</div>";
-  mapS.showNames=true;mapS.hl=[{s:V,color:COL.target,w:2.4}].concat(items.map((c,i)=>({s:cnB(c),color:ICOL[i%ICOL.length],w:2.2})));
+  $("prompt").innerHTML='<div class="q">'+(isH?"Saliendo de":"Desde")+" "+esc(A.n)+'</div><div class="extra">'+(isH?"La primera vía del temario a la que llegas por "+esc(V.n)+" en cada sentido.":"A qué vías del temario puedes pasar (en verde) y a cuáles no (en rojo).")+'</div><div class="cn-list">'+items.map((c,i)=>'<div class="cn-it" style="--cc:#334155"><b>'+(i+1)+'</b><span>'+esc(cnWhy(c))+'</span></div>').join("")+"</div>";
+  mapS.showNames=true;const BCOL=["#1c7ed6","#ae3ec9","#0c8599","#e8590c"],bset=[...new Set(items.map(c=>c.b))];mapS.hl=[{s:V,color:COL.target,w:2.4}].concat(bset.map((b,i)=>({s:byKey["s"+b],color:BCOL[i%BCOL.length],w:2.2})));
   mapS.labels=[{s:V,force:true}].concat(items.map(c=>({s:cnB(c),force:true})));
   if(isH)mapS.pins=[{x:A.x,y:A.y,color:COL.pin,label:A.n}];
-  mapS.extraDraw=(cx)=>{items.forEach((c,i)=>{const col=isH?(COL.ok||"#16a34a"):cnCol(c.s);if(isH)cnArrow(cx,[c.f,[c.x,c.y]],col,3.5,[7,5]);else cnArrow(cx,cnPath(c),col,4);cnDot(cx,c.x,c.y,ICOL[i%ICOL.length],String(i+1));});};
+  mapS.extraDraw=(cx)=>{items.forEach((c,i)=>{const col=isH?(COL.ok||"#16a34a"):cnCol(c.s);if(isH)cnArrow(cx,[c.f,[c.x,c.y]],col,3.5,[7,5]);else cnArrow(cx,cnPath(c),col,4,c.s?[9,6]:null);});
+    /* números al principio de cada llegada (juntos si salen del mismo sitio) */
+    const grp=new Map();items.forEach((c,i)=>{const P=isH||c.e==null?[c.x,c.y]:c.f,k=Math.round(P[0]/6)+","+Math.round(P[1]/6);if(!grp.has(k))grp.set(k,{P,n:[]});grp.get(k).n.push(i+1);});
+    for(const g of grp.values())cnDot(cx,g.P[0],g.P[1],"#334155",g.n.join("·"));};
   const b=[1e9,1e9,-1e9,-1e9],add=(x,y)=>{b[0]=Math.min(b[0],x);b[1]=Math.min(b[1],y);b[2]=Math.max(b[2],x);b[3]=Math.max(b[3],y);};
   for(const c of items){add(c.x,c.y);add(c.f[0],c.f[1]);for(const q of cnPath(c))add(q[0],q[1]);}mapS.fit([b[0]-120,b[1]-120,b[2]+120,b[3]+120],380);
   $("panel").innerHTML='<p class="hint">Mira cada cruce en el mapa: el número marca dónde está.</p><button class="btn primary block" id="b-ok">Vistas: a practicarlas</button>';$("b-ok").onclick=nextCard;}
@@ -1358,7 +1364,7 @@ function renderConn(p){
   {const b=[1e9,1e9,-1e9,-1e9];for(const q of approach){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
   if(lvl===2)hideMap(true);
   const reveal=()=>{hideMap(false);mapS.hl=[{s:V,color:COL.target,w:2.4},{s:B,color:isH?(COL.ok||"#16a34a"):cnCol(c.s),w:2.6}];mapS.labels=[{s:V,force:true},{s:B,force:true}];
-    mapS.extraDraw=(cx)=>{if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
+    mapS.extraDraw=(cx)=>{if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4,c.s?[9,6]:null);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
     mapS.resize();{const b=[1e9,1e9,-1e9,-1e9];for(const q of isH?approach:cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
     mapS.draw();$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");};
   const res=ok=>ok?(session.hint?1:2):0;
@@ -1383,7 +1389,7 @@ function renderConn(p){
     options(c.al.map((_,j)=>LT[j]),LT[c.ac],ok=>{const fb=mapS.k,cx0=mapS.cx,cy0=mapS.cy;reveal();mapS.extraDraw=drawAlts(c.ac);mapS.k=fb;mapS.cx=cx0;mapS.cy=cy0;mapS.draw();grade(key,res(ok),p.learn);});
   }else{
     const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha",4:"tomar la salida"}[c.k]||KTX[c.k];
-    $("prompt").innerHTML='<div class="q">¿Se puede '+verb+" hacia "+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b> en sentido <b>"+DIRN[c.h]+"</b>"+(lvl===1?" (flecha azul)":"")+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
+    $("prompt").innerHTML='<div class="q">'+(c.e!=null?"¿Se puede ir a "+esc(B.n)+" dirección "+DIRN[c.e]+"? ":"¿Se puede "+verb+" hacia "+esc(B.n)+"? ")+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+(c.cz?" ("+c.cz+")":"")+" en sentido <b>"+DIRN[c.h]+"</b>"+(lvl===1?" (flecha azul)":"")+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
     options(["Sí","No"],c.s===0?"Sí":"No",ok=>{reveal();grade(key,res(ok),p.learn);});
   }
 }
@@ -1395,11 +1401,11 @@ function cardVF(o,key,p){
   const left=L.filter(c=>c.k===1),src=left.length&&Math.random()<.65?left:L,c=src[Math.floor(Math.random()*src.length)];
   const A=o,B=cnB(c);if(!B)return false;
   const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha"}[c.k];
-  $("prompt").innerHTML='<div class="q">¿Verdadero o falso?</div><div class="placa" style="font-size:18px;line-height:1.3;padding:8px 12px;text-align:left">Por <b>'+esc(A.n)+'</b> en sentido <b>'+DIRN[c.h]+'</b> se puede '+verb+' hacia <b>'+esc(B.n)+'</b>.</div>';
+  $("prompt").innerHTML='<div class="q">¿Verdadero o falso?</div><div class="placa" style="font-size:18px;line-height:1.3;padding:8px 12px;text-align:left">Por <b>'+esc(A.n)+'</b>'+(c.cz?' ('+c.cz+')':'')+' en sentido <b>'+DIRN[c.h]+'</b> se puede '+(c.e!=null?'ir a <b>'+esc(B.n)+'</b> dirección <b>'+DIRN[c.e]+'</b>':verb+' hacia <b>'+esc(B.n)+'</b>')+'.</div>';
   hideMap(true);
   options(["Verdadero","Falso"],c.s===0?"Verdadero":"Falso",ok=>{hideMap(false);mapS.resize();
     mapS.hl=[{s:A,color:COL.target,w:2.4},{s:B,color:cnCol(c.s),w:2.6}];mapS.labels=[{s:A,force:true},{s:B,force:true}];
-    mapS.extraDraw=cx=>{cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,cnCol(c.s));};
+    mapS.extraDraw=cx=>{cnArrow(cx,cnPath(c),cnCol(c.s),4,c.s?[9,6]:null);cnDot(cx,c.x,c.y,cnCol(c.s));};
     const b=[1e9,1e9,-1e9,-1e9];for(const q of cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],330);
     $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");grade(key,ok?2:0,p.learn);});
   return true;}
@@ -1424,11 +1430,11 @@ function renderVF(p){
   const key=p.key,c=CNI.get(+key.slice(1,-1));if(!c){nextCard();return;}const A=cnA(c),B=cnB(c);if(!A||!B){nextCard();return;}
   $("st-tag").textContent="Práctica · "+(session.done+1)+"/"+session.total+(session.streak>=3?" · racha "+session.streak+" 🔥":"");$("st-tag").className="tag";
   const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha",4:"tomar la salida"}[c.k]||KTX[c.k];
-  $("prompt").innerHTML='<div class="q">¿Verdadero o falso?</div><div class="placa" style="font-size:18px;line-height:1.3;padding:8px 12px;text-align:left">Por <b>'+esc(A.n)+'</b> en sentido <b>'+DIRN[c.h]+'</b> se puede '+verb+' hacia <b>'+esc(B.n)+'</b>.</div>';
+  $("prompt").innerHTML='<div class="q">¿Verdadero o falso?</div><div class="placa" style="font-size:18px;line-height:1.3;padding:8px 12px;text-align:left">Por <b>'+esc(A.n)+'</b>'+(c.cz?' ('+c.cz+')':'')+' en sentido <b>'+DIRN[c.h]+'</b> se puede '+(c.e!=null?'ir a <b>'+esc(B.n)+'</b> dirección <b>'+DIRN[c.e]+'</b>':verb+' hacia <b>'+esc(B.n)+'</b>')+'.</div>';
   hideMap(true);
   options(["Verdadero","Falso"],c.s===0?"Verdadero":"Falso",ok=>{hideMap(false);mapS.resize();
     mapS.hl=[{s:A,color:COL.target,w:2.4},{s:B,color:cnCol(c.s),w:2.6}];mapS.labels=[{s:A,force:true},{s:B,force:true}];
-    mapS.extraDraw=cx=>{cnArrow(cx,cnPath(c),cnCol(c.s),4);cnDot(cx,c.x,c.y,cnCol(c.s));};
+    mapS.extraDraw=cx=>{cnArrow(cx,cnPath(c),cnCol(c.s),4,c.s?[9,6]:null);cnDot(cx,c.x,c.y,cnCol(c.s));};
     const b=[1e9,1e9,-1e9,-1e9];for(const q of cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],330);
     $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");grade(key,ok?2:0,null);});
 }
