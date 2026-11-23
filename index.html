@@ -892,7 +892,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.85";
+const APPVER="0.86";
 const LS="cbm1:";
 const ST={cards:{},meta:{npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1394,7 +1394,7 @@ function renderConn(p){
       options(opts,B.n,ok=>{reveal();grade(key,res(ok),p.learn);});}
     return;}
   /* vía -> vía. Nivel 1: «¿qué flecha te lleva a B?» (una letra por cada giro posible) o «¿se puede…?» con mapa. Nivel 2: «¿se puede…?» sin mapa */
-  const letters=lvl===1&&c.s===0&&c.al&&c.al.length>=2&&((((cc&&cc[3])||0)+c.i)%2===0||session.practice&&Math.random()<.5);
+  const letters=lvl===1&&c.s===0&&c.al&&c.al.length>=3&&c.k!==4&&!/^(Autov|Autopista|Carretera)/.test(cnA(c).n)&&!/^(Autov|Autopista|Carretera)/.test(cnB(c).n)&&((((cc&&cc[3])||0)+c.i)%2===0||session.practice&&Math.random()<.5);
   const LT="ABCDEF",ALC=["#7c3aed","#db2777","#0891b2","#ca8a04","#4b5563","#059669"];
   if(letters){
     $("prompt").innerHTML='<div class="q">¿Qué flecha te lleva a '+esc(B.n)+"? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b> en el sentido de la flecha azul. Cada letra es un giro que puedes hacer en este cruce.</div>";
@@ -1656,7 +1656,7 @@ function hideMap(on,onHint){const nm=$("nomap");nm.hidden=!on;if(!on)return;sess
 /* ---------- errores de corrección reportados por el usuario ---------- */
 let REP=lsGet("reports")||{list:[],del:[]};
 /* lo que ya he corregido: errores reportados hasta esta fecha y señales ya revisadas */
-const REPDONE=Date.parse("2026-11-22T02:11:00+01:00");
+const REPDONE=Date.parse("2026-11-24T00:26:00+01:00");
 {let ch=false;for(const r of REP.list)if(r.id<=REPDONE&&!REP.del.includes(r.id)){REP.del.push(r.id);ch=true;}if(ch)lsSet("reports",REP);}
 function saveRep(){lsSet("reports",REP);syncDirty=true;}
 function repVisible(){const d=new Set(REP.del);return REP.list.filter(r=>!d.has(r.id)).sort((a,b)=>b.id-a.id);}
