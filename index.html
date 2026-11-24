@@ -570,7 +570,10 @@ const ringPath=list=>{const p=new Path2D();for(const o of list)for(const a of o.
 const ADMDP=ringPath(ADMD),ADMBP=ringPath(ADMB);
 /* relleno translúcido por zona (colores alternos para distinguir vecinas) */
 const ADMPAL=["#e11d48","#2563eb","#16a34a","#d97706","#9333ea","#0891b2","#db2777","#65a30d","#7c3aed","#ea580c","#0d9488","#4f46e5"];
-ADMD.forEach((o,i)=>{o.P=ringPath([o]);o.col=ADMPAL[i%ADMPAL.length];});ADMB.forEach((o,i)=>{o.P=ringPath([o]);o.col=ADMPAL[(i*5+o.d*3)%ADMPAL.length];});
+/* cada distrito un tono; sus barrios, variaciones de ese tono */
+ADMD.forEach((o,i)=>{o.P=ringPath([o]);o.hue=Math.round((i*137.5)%360);o.col="hsl("+o.hue+",70%,50%)";});
+{const cnt={};ADMB.forEach(o=>{o.P=ringPath([o]);const D=ADMD[o.d]||ADMD.find(x=>x.n===o.d)||ADMD[0];const j=cnt[o.d]=(cnt[o.d]||0)+1;
+  const L=[50,36,62,43,56,30,67][j%7],H=D.hue+[0,-10,10,-5,5,-15,15][j%7];o.col="hsl("+H+",75%,"+L+"%)";});}
 const ADMK=0.045; /* a partir de este zoom se ven los barrios; más lejos, solo distritos */
 function inRings(R,x,y){let c=false;for(const a of R){for(let i=0,n=a.length/2,j=n-1;i<n;j=i++){const xi=a[2*i],yi=a[2*i+1],xj=a[2*j],yj=a[2*j+1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c;}}return c;}
 function admAt(x,y){const b=ADMB.find(o=>inRings(o.R,x,y));const d=b?ADMD[b.d]:ADMD.find(o=>inRings(o.R,x,y));return {b,d};}
@@ -747,8 +750,10 @@ class MapView{
     for(const h of this.hl){c.globalAlpha=h.alpha||1;c.fillStyle=h.color;c.strokeStyle=h.color;c.lineWidth=(h.w||4.5)/k;c.fill(h.s.P);c.stroke(h.s.P);}c.globalAlpha=1;
     if(this.route){c.save();c.globalAlpha=1;c.strokeStyle=this.route.color;c.lineWidth=5/k;c.strokeStyle=COL.halo;c.setLineDash([]);c.stroke(this.route.P);c.strokeStyle=this.route.color;c.lineWidth=3/k;c.lineCap="round";c.lineJoin="round";c.setLineDash(this.route.dash?[10/k,8/k]:[]);c.stroke(this.route.P);c.restore();}
     if(this.showAdm){c.save();c.lineJoin="round";
-      const L=k>=ADMK?ADMB:ADMD;c.globalAlpha=this.sat?.22:.16;for(const o of L){c.fillStyle=o.col;c.fill(o.P);}c.globalAlpha=1;c.strokeStyle=COL.adm;
+      const L=k>=ADMK?ADMB:ADMD;c.globalAlpha=this.sat?.3:(k>=ADMK?.26:.2);for(const o of L){c.fillStyle=o.col;c.fill(o.P);}c.globalAlpha=1;c.strokeStyle=COL.adm;
       if(k>=ADMK){c.globalAlpha=.85;c.lineWidth=1.4/k;c.setLineDash([3/k,3/k]);c.stroke(ADMBP);}
+      /* límite entre distritos bien marcado cuando se ven los barrios */
+      if(k>=ADMK){c.globalAlpha=1;c.setLineDash([]);c.strokeStyle=COL.halo;c.lineWidth=6.5/k;c.stroke(ADMDP);c.strokeStyle=COL.adm;c.lineWidth=4/k;c.stroke(ADMDP);c.restore();c.save();}
       c.globalAlpha=1;c.setLineDash([10/k,6/k]);c.lineWidth=(k<0.06?2:2.8)/k;c.stroke(ADMDP);c.restore();}
     c.setTransform(d,0,0,d,0,0);
     for(const h of this.hl){const b=h.s.b,span=Math.max(b[2]-b[0],b[3]-b[1])*k;if(span<14){const p=this.toScreen(h.s.c[0],h.s.c[1]);c.beginPath();c.arc(p[0],p[1],18,0,6.283);c.strokeStyle=h.color;c.lineWidth=2.5;c.stroke();}}
@@ -937,7 +942,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.96";
+const APPVER="0.97";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
