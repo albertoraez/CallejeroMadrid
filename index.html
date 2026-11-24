@@ -904,7 +904,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.92";
+const APPVER="0.93";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1066,12 +1066,17 @@ function pick(){const s=session;s.n++;
     if(pend.length){pend.sort((a,b)=>a.at-b.at);s.learn.splice(s.learn.indexOf(pend[0]),1);return{type:"card",key:pend[0].key,learn:pend[0]};}
     const a=s.cq[0].a,items=s.cq.filter(c=>c.a===a).slice(0,3);s.cq=s.cq.filter(c=>!items.includes(c));s.cnews=(s.cnews||[]).filter(c=>!items.includes(c));
     s.cchunk=new Set(items.map(c=>"j"+c.i+"j"));s.n--;s.sinceNew=0;return{type:"cintro",items};}
+  /* grupo cerrado con sus cruces: una ruta corta que pase por sus vías */
+  if(s.chunk&&s.ccDone&&!s.grDone&&!(s.cq&&s.cq.length)){
+    const pend=s.learn.filter(l=>s.cchunk&&s.cchunk.has(l.key)&&l.step===0);
+    if(!pend.length){s.grDone=true;const bk=new Set(BG[byKey[[...s.chunk][0]].bg].items.filter(introduced).map(o=>o.key));
+      const r=groupRoute(s.chunk,2)||groupRoute(bk,2);if(r){s.n--;return{type:"groute",r};}}}
   if(s.news.length&&!s.chunkLeft){
     const pend=s.learn.filter(l=>(s.chunk&&s.chunk.has(l.key.slice(0,-1))||s.cchunk&&s.cchunk.has(l.key))&&l.step===0);
     if(pend.length){pend.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);s.learn.splice(s.learn.indexOf(pend[0]),1);return{type:"card",key:pend[0].key,learn:pend[0]};}
     const bg=s.news[0].bg,all=s.news.filter(o=>o.bg===bg);
     if(bg!==s.lastBg){s.lastBg=bg;s.part=0;s.parts=Math.ceil(all.length/CHUNK);s.seenBg=[];}
-    const items=all.slice(0,CHUNK);s.part++;s.chunk=new Set(items.map(o=>o.key));s.chunkLeft=items.length;s.ccDone=false;s.n--;
+    const items=all.slice(0,CHUNK);s.part++;s.chunk=new Set(items.map(o=>o.key));s.chunkLeft=items.length;s.ccDone=false;s.grDone=false;s.n--;
     return{type:"bintro",g:BG[bg],items,part:s.part,parts:s.parts,prev:s.seenBg.slice()};}
   if(s.news.length){s.sinceNew=0;s.chunkLeft--;const o=s.news.shift();(s.seenBg=s.seenBg||[]).push(o);return{type:"intro",o};}
   /* conexiones nuevas: de 1 a 3 de la misma vía; el siguiente grupo cuando se haya contestado una vez cada una del anterior */
@@ -1083,6 +1088,9 @@ function pick(){const s=session;s.n++;
     s.cchunk=new Set(items.map(c=>"j"+c.i+"j"));s.n--;s.sinceNew=0;return{type:"cintro",items};}
   if(s.rev.length){return{type:"card",key:s.rev.shift()};}
   if(s.learn.length){s.learn.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
+  /* para terminar el día: una ruta que mezcle lo ya visto del barrio en curso (lo más parecido al examen) */
+  if(!s.finalRoute&&!s.timeUp&&s.done>=8){s.finalRoute=true;const cg=currentGroup(),g=BG[cg>=0?cg:0],ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
+    const r=ks.size>=4?groupRoute(ks,3):null;if(r)return{type:"groute",r};}
   return null;}
 function nextCard(){
   const s=session;if(s.deadline&&Date.now()>s.deadline){s.rev=[];s.learn=[];}
@@ -1093,7 +1101,7 @@ function nextCard(){
   mapS.hl=[];mapS.pins=[];mapS.labels=[];mapS.onTap=null;mapS.showNames=false;mapS.showDir=false;mapS.route=null;mapS.extraDraw=null;mapS.chk=null;hideMap(false);s.hint=false;$("v-study").classList.remove("exdone","exq","exmode");
   $("st-left").textContent=p?"Quedan "+remaining():"";
   if(!p){finish();return;}
-  if(p.type==="intro")renderIntro(p.o);else if(p.type==="cintro")renderCIntro(p.items);else if(p.type==="bintro")renderBIntro(p.g,p.items,p.part,p.parts,p.prev);else renderCard(p);
+  if(p.type==="intro")renderIntro(p.o);else if(p.type==="cintro")renderCIntro(p.items);else if(p.type==="bintro")renderBIntro(p.g,p.items,p.part,p.parts,p.prev);else if(p.type==="groute")renderGRoute(p.r);else renderCard(p);
 }
 const PT=[["sn","Nombrar vía"],["su","Ubicar vía"],["sd","Sentido de la vía"],["hn","Nombrar hito"],["hu","Ubicar hito"],["hc","Calle del hito · con mapa"],["hC","Calle del hito · sin mapa"],["jc","Conexiones · con mapa"],["jC","Conexiones · sin mapa"],["vf","Verdadero o falso · giros"],["rp","Ruta paso a paso"],["rt","Recorrido de vías"]];
 const PRANS=[["auto","Según conocimiento"],["mix","Normal"]];
@@ -1583,6 +1591,53 @@ function renderStep(p){
   };
   step();
 }
+
+/* ---------- rutas cortas con lo que acabas de aprender ---------- */
+/* camino legal de 3 o 4 vías por conexiones ya vistas, que pase por las vías del grupo (o del barrio) */
+function groupRoute(keys,minIn){
+  if(!CN.length)return null;const G=new Map();
+  for(const c of CN){if(c.s!==0||c.k===4||c.a[0]!=="s")continue;const A=cnA(c),B=cnB(c);if(!A||!B||A.n===B.n||!knows(A)||!knows(B))continue;
+    if(!keys.has(A.key)&&!keys.has(B.key)&&!(c.k===1||c.k===2))continue;
+    if(!G.has(A.key))G.set(A.key,[]);G.get(A.key).push(c);}
+  const starts=shuffle([...keys].filter(k=>G.has(k)));let best=null,bs=-1;
+  for(const st of starts){for(let tr=0;tr<25;tr++){
+    const path=[byKey[st]],cs=[];let cur=st;
+    for(let d=0;d<3;d++){const pv=cs[cs.length-1],n8=(a,b)=>Math.min((a-b+8)%8,(b-a+8)%8)<=1;
+      /* seguir en el sentido en que saliste: el siguiente giro va en esa dirección y más adelante por esa vía */
+      const L=(G.get(cur)||[]).filter(c=>!path.some(o=>o.n===cnB(c).n)&&(!pv||(pv.e!=null&&c.h!=null&&n8(c.h,pv.e)&&((c.x-pv.x)*Math.sin(pv.e*Math.PI/4)+(c.y-pv.y)*Math.cos(pv.e*Math.PI/4))>5)));if(!L.length)break;
+      const pref=L.filter(c=>keys.has(cnB(c).key)),c=(pref.length&&Math.random()<.7?pref:L)[Math.floor(Math.random()*(pref.length&&Math.random()<.7?pref:L).length)]||L[0];
+      cs.push(c);path.push(cnB(c));cur=cnB(c).key;}
+    if(path.length<3)continue;
+    const inG=path.filter(o=>keys.has(o.key)).length,turns=cs.filter(c=>c.k===1||c.k===2).length,sc=inG*2+turns+path.length;
+    if(inG>=minIn&&sc>bs){bs=sc;best={route:path,conns:cs};}}}
+  return best;}
+function renderGRoute(r){
+  const route=r.route,st={i:0,err:0},A=route[0],Z=route[route.length-1];
+  const step=()=>{
+    session.answered=false;const cur=route[st.i],nxt=route[st.i+1],c=r.conns[st.i];
+    $("st-tag").textContent="Ruta corta · paso "+(st.i+1)+"/"+(route.length-1);$("st-tag").className="tag";
+    $("prompt").innerHTML='<div class="q">Ruta de <b>'+esc(A.n)+'</b> a <b>'+esc(Z.n)+'</b></div><div class="extra">Vas por <b>'+esc(cur.n)+'</b>'+(c.h!=null?' hacia el <b>'+DIRN[c.h]+'</b>':'')+'. ¿Por qué vía <span class="k">sigues</span>?</div>';
+    mapS.hl=route.slice(0,st.i).map(o=>({s:o,color:"#9ca3af",w:2})).concat([{s:cur,color:COL.target,w:2.6},{s:Z,color:"#7c3aed",w:2}]);
+    mapS.labels=[{s:cur,force:true},{s:Z,force:true}];mapS.extraDraw=cx=>{for(let j=0;j<st.i;j++)cnArrow(cx,cnPath(r.conns[j]),"#9ca3af",3);};
+    const b=[Math.min(cur.b[0],Z.b[0]),Math.min(cur.b[1],Z.b[1]),Math.max(cur.b[2],Z.b[2]),Math.max(cur.b[3],Z.b[3])];mapS.fit(b,500);
+    const ex=new Set([cur.n,nxt.n,...route.slice(0,st.i).map(o=>o.n)]);
+    let ds=shuffle([...cnLinked("s"+cur.i)].filter(n=>!ex.has(n))).slice(0,2);if(ds.length<2)ds=ds.concat(shuffle(nearest(cur,S,10).map(x=>x.n).filter(n=>!ex.has(n)&&!ds.includes(n))).slice(0,2-ds.length));
+    options(shuffle(ds.concat([nxt.n])),nxt.n,ok=>{if(!ok)st.err++;
+      mapS.hl.push({s:nxt,color:ok?(COL.ok||"#16a34a"):"#dc2626",w:2.6});mapS.labels.push({s:nxt,force:true});
+      mapS.extraDraw=cx=>{for(let j=0;j<=st.i-1;j++)cnArrow(cx,cnPath(r.conns[j]),"#9ca3af",3);cnArrow(cx,cnPath(c),COL.ok||"#16a34a",4);};mapS.draw();
+      st.i++;const last=st.i>=route.length-1;
+      const btn=document.createElement("button");btn.className="btn primary block";btn.textContent=last?"Ver la ruta completa":"Siguiente paso";
+      setTimeout(()=>{for(const x of [...$("panel").querySelectorAll("button")])if(x.textContent==="Siguiente")x.remove();$("panel").appendChild(btn);},0);
+      btn.onclick=()=>{btn.remove();if(!last){step();return;}
+        $("prompt").innerHTML='<div class="q">Ruta completa'+(st.err?' · '+st.err+' fallo'+(st.err>1?'s':''):' · ¡sin fallos!')+'</div><div class="extra">'+route.map(o=>'<b>'+esc(o.n)+'</b>').join(' → ')+'</div><div class="extra">'+r.conns.map(c=>esc(cnWhy(c))).join('<br>')+'</div>';
+        mapS.hl=route.map(o=>({s:o,color:COL.target,w:2.2}));mapS.labels=route.map(o=>({s:o,force:true}));
+        mapS.extraDraw=cx=>{r.conns.forEach(c=>cnArrow(cx,cnPath(c),COL.ok||"#16a34a",4));};
+        const bb=[1e9,1e9,-1e9,-1e9];for(const o of route){bb[0]=Math.min(bb[0],o.b[0]);bb[1]=Math.min(bb[1],o.b[1]);bb[2]=Math.max(bb[2],o.b[2]);bb[3]=Math.max(bb[3],o.b[3]);}mapS.fit(bb,500);
+        /* los pasos fallados vuelven como tarjeta de conexión */
+        session.done++;
+        const nx=document.createElement("button");nx.className="btn primary block";nx.textContent="Siguiente";nx.onclick=nextCard;$("panel").innerHTML="";$("panel").appendChild(nx);};
+    });};
+  step();}
 
 /* ---------- recorridos tipo examen: 3 opciones entre dos hitos ---------- */
 /* las preguntas de examen van en un archivo aparte (ex.json) para que la app cargue rápido */
