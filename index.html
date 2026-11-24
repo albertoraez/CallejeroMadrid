@@ -568,6 +568,10 @@ function decRings(L){return L.map(fl=>{const a=new Float32Array(fl.length);let x
 const ADMD=ADM.dist.map(d=>({n:d.n,c:d.c,R:decRings(d.r)})),ADMB=ADM.bar.map(b=>({n:b.n,d:b.d,c:b.c,R:decRings(b.r)}));
 const ringPath=list=>{const p=new Path2D();for(const o of list)for(const a of o.R){for(let i=0;i<a.length;i+=2){if(i)p.lineTo(a[i],-a[i+1]);else p.moveTo(a[i],-a[i+1]);}p.closePath();}return p;};
 const ADMDP=ringPath(ADMD),ADMBP=ringPath(ADMB);
+/* relleno translúcido por zona (colores alternos para distinguir vecinas) */
+const ADMPAL=["#e11d48","#2563eb","#16a34a","#d97706","#9333ea","#0891b2","#db2777","#65a30d","#7c3aed","#ea580c","#0d9488","#4f46e5"];
+ADMD.forEach((o,i)=>{o.P=ringPath([o]);o.col=ADMPAL[i%ADMPAL.length];});ADMB.forEach((o,i)=>{o.P=ringPath([o]);o.col=ADMPAL[(i*5+o.d*3)%ADMPAL.length];});
+const ADMK=0.045; /* a partir de este zoom se ven los barrios; más lejos, solo distritos */
 function inRings(R,x,y){let c=false;for(const a of R){for(let i=0,n=a.length/2,j=n-1;i<n;j=i++){const xi=a[2*i],yi=a[2*i+1],xj=a[2*j],yj=a[2*j+1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c;}}return c;}
 function admAt(x,y){const b=ADMB.find(o=>inRings(o.R,x,y));const d=b?ADMD[b.d]:ADMD.find(o=>inRings(o.R,x,y));return {b,d};}
 const KINDTXT=["seguir recto","girar a la izquierda","girar a la derecha","cambiar de sentido"];
@@ -672,7 +676,7 @@ class MapView{
   fast(){const c=this.ctx,d=this.dpr||1,[cx0,cy0,k0,W0,H0]=this.snapV;if(W0!==this.W||H0!==this.H){this.paint();this.keepSnap();return;}
     const s=this.k/k0,tx=d*((cx0-this.cx)*this.k+this.W/2*(1-s)),ty=d*((this.cy-cy0)*this.k+this.H/2*(1-s));
     c.setTransform(1,0,0,1,0,0);c.fillStyle=COL["map-bg"];c.fillRect(0,0,this.cv.width,this.cv.height);
-    const sw=this.snap.width*s,sh=this.snap.height*s;if(tx>0||ty>0||tx+sw<this.cv.width||ty+sh<this.cv.height)this.drawBase(c,d,this.k,1);
+    const sw=this.snap.width*s,sh=this.snap.height*s;if(tx>0||ty>0||tx+sw<this.cv.width||ty+sh<this.cv.height){this.drawBase(c,d,this.k,1);if(this.sat){this._satCache=1;this.drawSat(c,d,this.k);this._satCache=0;c.setTransform(1,0,0,1,0,0);}}
     c.setTransform(s,0,0,s,tx,ty);c.drawImage(this.snap,0,0);c.setTransform(1,0,0,1,0,0);}
   /* fondo en baldosas cacheadas por nivel de zoom */
   baseLayers(c,k,V0,V1){
@@ -710,21 +714,25 @@ class MapView{
   /* capa satélite: ortofoto del PNOA (IGN); si una baldosa falla, la de Esri */
   drawSat(c,d,k){
     const lat0=D.o[1],cosl=Math.cos(lat0*Math.PI/180);
-    const z=Math.max(10,Math.min(19,Math.ceil(Math.log2(156543.03*cosl*k*d))));
+    const z=Math.max(10,Math.min(19,Math.ceil(Math.log2(156543.03*cosl*k*d))-1)),onlyCache=this._satCache;
     const w2ll=(x,y)=>[x/D.o[2]+D.o[0],y/D.o[3]+D.o[1]],ll2w=(lo,la)=>[(lo-D.o[0])*D.o[2],(la-D.o[1])*D.o[3]];
     const n=2**z,tX=lo=>(lo+180)/360*n,tY=la=>{const r=la*Math.PI/180;return(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n;};
     const lon=x=>x/n*360-180,lat=y=>{const t=Math.PI*(1-2*y/n);return 180/Math.PI*Math.atan(Math.sinh(t));};
     const a=w2ll(...this.toWorld(0,this.H)),b=w2ll(...this.toWorld(this.W,0));
     const x0=Math.floor(tX(a[0])),x1=Math.floor(tX(b[0])),y0=Math.floor(tY(b[1])),y1=Math.floor(tY(a[1]));
-    if((x1-x0+1)*(y1-y0+1)>80)return;
+    if((x1-x0+1)*(y1-y0+1)>120)return;
     if(!SATC.m)SATC.m=new Map();
     c.setTransform(d,0,0,d,0,0);
     for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
       const key=z+"/"+x+"/"+y;let im=SATC.m.get(key);
+      /* mientras no llega, la de un nivel más lejano ya cargada (recortada), para que no se vea el hueco */
+      if(!(im&&im._ok)){let pz=z-1,px=x>>1,py=y>>1,f=2;while(pz>=Math.max(8,z-6)){const P=SATC.m.get(pz+"/"+px+"/"+py);if(P&&P._ok){const sx=(x-px*f)*256/f,sy=(y-py*f)*256/f;
+          const q0=this.toScreen(...ll2w(lon(x),lat(y))),q1=this.toScreen(...ll2w(lon(x+1),lat(y+1)));c.drawImage(P,sx,sy,256/f,256/f,q0[0],q0[1],q1[0]-q0[0]+0.5,q1[1]-q0[1]+0.5);break;}pz--;px>>=1;py>>=1;f*=2;}}
+      if(!im&&onlyCache)continue;
       if(!im){im=new Image();im.decoding="async";im._z=z;
         im.onload=()=>{im._ok=1;this.draw();};im.onerror=()=>{if(!im._alt){im._alt=1;im.src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"+z+"/"+y+"/"+x;}};
         im.src="https://www.ign.es/wmts/pnoa-ma?service=WMTS&request=GetTile&version=1.0.0&format=image/jpeg&layer=OI.OrthoimageCoverage&style=default&tilematrixset=GoogleMapsCompatible&TileMatrix="+z+"&TileRow="+y+"&TileCol="+x;
-        SATC.m.set(key,im);if(SATC.m.size>400)SATC.m.delete(SATC.m.keys().next().value);}
+        SATC.m.set(key,im);if(SATC.m.size>900)SATC.m.delete(SATC.m.keys().next().value);}
       if(!im._ok)continue;
       const p0=this.toScreen(...ll2w(lon(x),lat(y))),p1=this.toScreen(...ll2w(lon(x+1),lat(y+1)));
       c.drawImage(im,p0[0],p0[1],p1[0]-p0[0]+0.5,p1[1]-p0[1]+0.5);}
@@ -738,8 +746,9 @@ class MapView{
     c.setTransform(k*d,0,0,k*d,(this.W/2-this.cx*k)*d,(this.H/2+this.cy*k)*d);c.lineJoin="round";
     for(const h of this.hl){c.globalAlpha=h.alpha||1;c.fillStyle=h.color;c.strokeStyle=h.color;c.lineWidth=(h.w||4.5)/k;c.fill(h.s.P);c.stroke(h.s.P);}c.globalAlpha=1;
     if(this.route){c.save();c.globalAlpha=1;c.strokeStyle=this.route.color;c.lineWidth=5/k;c.strokeStyle=COL.halo;c.setLineDash([]);c.stroke(this.route.P);c.strokeStyle=this.route.color;c.lineWidth=3/k;c.lineCap="round";c.lineJoin="round";c.setLineDash(this.route.dash?[10/k,8/k]:[]);c.stroke(this.route.P);c.restore();}
-    if(this.showAdm){c.save();c.lineJoin="round";c.strokeStyle=COL.adm;
-      if(k>=0.06){c.globalAlpha=.8;c.lineWidth=1.3/k;c.setLineDash([3/k,3/k]);c.stroke(ADMBP);}
+    if(this.showAdm){c.save();c.lineJoin="round";
+      const L=k>=ADMK?ADMB:ADMD;c.globalAlpha=this.sat?.22:.16;for(const o of L){c.fillStyle=o.col;c.fill(o.P);}c.globalAlpha=1;c.strokeStyle=COL.adm;
+      if(k>=ADMK){c.globalAlpha=.85;c.lineWidth=1.4/k;c.setLineDash([3/k,3/k]);c.stroke(ADMBP);}
       c.globalAlpha=1;c.setLineDash([10/k,6/k]);c.lineWidth=(k<0.06?2:2.8)/k;c.stroke(ADMDP);c.restore();}
     c.setTransform(d,0,0,d,0,0);
     for(const h of this.hl){const b=h.s.b,span=Math.max(b[2]-b[0],b[3]-b[1])*k;if(span<14){const p=this.toScreen(h.s.c[0],h.s.c[1]);c.beginPath();c.arc(p[0],p[1],18,0,6.283);c.strokeStyle=h.color;c.lineWidth=2.5;c.stroke();}}
@@ -876,8 +885,8 @@ class MapView{
       if(s.n.length>18&&ws.length>2){const i=Math.ceil(ws.length/2);if(!text(ws.slice(0,i).join(" "),p[0],p[1]-sz*0.58,0,oo))return 0;text(ws.slice(i).join(" "),p[0],p[1]+sz*0.58,0,Object.assign({},oo,{force:true}));return 1;}
       return text(s.n,p[0],p[1],0,oo)?1:0;};
     const forced=new Set();
-    if(this.showAdm){if(k<0.2){for(const o of ADMD){const p=this.toScreen(o.c[0],o.c[1]);text(o.n.replace(/^\d+ /,"").toUpperCase(),p[0],p[1],0,{size:k<0.05?12:14,bold:true,color:COL.adm,force:false});}}
-      if(k>=0.1&&k<1.2){for(const o of ADMB){const p=this.toScreen(o.c[0],o.c[1]);if(p[0]<-50||p[1]<-20||p[0]>this.W+50||p[1]>this.H+20)continue;text(o.n,p[0],p[1],0,{size:12,color:COL.adm,force:false});}}}
+    if(this.showAdm){if(k<ADMK){for(const o of ADMD){const p=this.toScreen(o.c[0],o.c[1]);text(o.n.replace(/^\d+ /,"").toUpperCase(),p[0],p[1],0,{size:k<0.025?13:15,bold:true,color:COL.ink,force:k>=0.03});}}
+      else if(k<1.6){for(const o of ADMB){const p=this.toScreen(o.c[0],o.c[1]);if(p[0]<-60||p[1]<-20||p[0]>this.W+60||p[1]>this.H+20)continue;text(o.n,p[0],p[1],0,{size:k<0.1?12:14,bold:true,color:COL.ink,force:k<0.1?false:true});}}}
     if(this.extraDraw)this.extraDraw(c,k);
     if(this.chk){const R=this.chk;c.lineCap="round";c.lineJoin="round";
       const pl=(pts,col,w,dash,al)=>{c.beginPath();pts.forEach((p,i)=>{const s=this.toScreen(p[0],p[1]);i?c.lineTo(s[0],s[1]):c.moveTo(s[0],s[1]);});c.setLineDash(dash||[]);c.globalAlpha=al;c.lineWidth=w;c.strokeStyle=col;c.stroke();c.setLineDash([]);c.globalAlpha=1;};
@@ -928,7 +937,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.95";
+const APPVER="0.96";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
