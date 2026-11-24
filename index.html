@@ -904,7 +904,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.93";
+const APPVER="0.94";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1010,7 +1010,7 @@ document.addEventListener("visibilitychange",()=>{if(!sbUser)return;if(document.
 /* ---------- scheduling ---------- */
 const introduced=o=>!!ST.cards[o.key+"n"];
 const learned=o=>cardTypes(o).every(t=>{const c=ST.cards[o.key+t];return c&&c[3]>0;});
-function countDue(){const t=dayNum();let n=0;for(const k in ST.cards){const c=ST.cards[k];if(c[3]>0&&c[0]<=t)n++;}return n;}
+function countDue(){const t=dayNum();let n=0;for(const k in ST.cards){const c=ST.cards[k];if(c[3]>0&&c[0]<=t){if(k[0]==="j"&&CNI.size){const cc=CNI.get(+k.slice(1,-1));if(!cc||hwConn(cc))continue;}n++;}}return n;}
 function groupOrder(){const z=ST.meta.bq,o=[0];if(z>0&&z<BG.length)o.push(z);for(let i=1;i<BG.length;i++)if(i!==z)o.push(i);return o;}
 function nextNew(n){const out=[];for(const gi of groupOrder()){for(const o of BG[gi].items){if(out.length>=n)return out;if(!introduced(o))out.push(o);}}return out;}
 /* ritmo: lo decide la app según los minutos al día y los repasos pendientes (con 20 min, unas 8 nuevas al día:
@@ -1032,7 +1032,7 @@ const MCOL=v=>v>=.85?"#16a34a":v>=.5?"#84cc16":v>=.2?"#f59e0b":v>0?"#f97316":nul
 let session=null,mapS=null,mapE=null,mapC=null;
 async function startSession(){
   await loadCN();rollDay();const t=dayNum(),rev=[],learn=[];
-  for(const k in ST.cards){const c=ST.cards[k];if(c[3]>0){if(c[0]<=t)rev.push(k);}else learn.push({key:k,at:0,step:0});}
+  for(const k in ST.cards){if(k[0]==="j"){const cc=CNI.get(+k.slice(1,-1));if(!cc||hwConn(cc))continue;}const c=ST.cards[k];if(c[3]>0){if(c[0]<=t)rev.push(k);}else learn.push({key:k,at:0,step:0});}
   rev.sort((a,b)=>ST.cards[a][0]-ST.cards[b][0]||Math.random()-.5);
   shuffle(learn);learn.forEach((l,i)=>l.at=i*2);
   session={rev,learn,news:nextNew(newBudget()),cnews:nextConn(connBudget()),cq:[],n:0,sinceNew:9,cur:null,answered:false,done:0,studyEnd:Date.now()+(ST.meta.min||20)*6e4};
@@ -1317,7 +1317,9 @@ function renderCard(p){
   if(type==="n"){
     const ovN=o.kind==="s"?(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n):[];
     const pool=o.kind==="s"?S:H,sim=simTo(o.n,pool,[o.n].concat(ovN)).slice(0,1),near_=shuffle(nearest(o,pool,8).filter(x=>!sim.includes(x)&&!ovN.includes(x.n))).slice(0,3-sim.length),opts=shuffle(sim.concat(near_).concat([o]));
-    $("prompt").innerHTML='<div class="q">'+(o.kind==="s"?(o.t==="Plaza"||o.t==="Glorieta"?"¿<span class=\"k\">Cómo se llama</span> la "+o.t.toLowerCase()+" resaltada?":"¿<span class=\"k\">Cómo se llama</span> la vía resaltada?"):"¿<span class=\"k\">Qué hito</span> hay en el punto marcado?")+"</div>";
+    const hwA=o.kind==="s"&&!/^(Autov|Autopista)/.test(o.n)?(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(x=>x&&/^(Autov|Autopista)/.test(x.n)):[];
+    const hwOf=o.kind==="s"&&/^(Autov|Autopista)/.test(o.n)?(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean):[];
+    $("prompt").innerHTML=hwA.length?'<div class="q">¿<span class="k">Cómo se llama</span> este tramo de la <b>'+esc(hwA[0].n.replace(/^(Autovía|Autopista)\s+/,""))+'</b>?</div>':hwOf.length?'<div class="q">¿<span class="k">Cómo se llama</span> la vía resaltada?</div><div class="extra">Vale el nombre de la autovía o el de la calle ('+hwOf.length+' nombre'+(hwOf.length>1?'s':'')+' más).</div>':'<div class="q">'+(o.kind==="s"?(o.t==="Plaza"||o.t==="Glorieta"?"¿<span class=\"k\">Cómo se llama</span> la "+o.t.toLowerCase()+" resaltada?":"¿<span class=\"k\">Cómo se llama</span> la vía resaltada?"):"¿<span class=\"k\">Qué hito</span> hay en el punto marcado?")+"</div>";
     if(o.kind==="s"){mapS.hl=[{s:o,color:COL.target}];mapS.fit(o.b,spanOf(o,1.7,320));}else{mapS.pins=[{x:o.x,y:o.y,color:COL.pin}];mapS.labels=hitoRef(mapS,o,4);mapS.fit([o.x,o.y,o.x,o.y],1300);}
     const reveal=()=>{if(o.kind==="s")mapS.labels=contextLabels(o,5).concat([{s:o,force:true}]);else{mapS.pins[0].label=o.n;mapS.labels=mapS.labels.concat(contextLabels(o,5).filter(l=>l.s!==o.street));}mapS.draw();};
     if(useWrite(key,p))writeQ(o.n,v=>gradeWritten(v,o,o.kind==="s"?"s":"hito"),r=>{reveal();grade(key,r,p.learn);},{ph:o.kind==="s"?"Escribe el nombre de la vía":"Escribe el nombre del hito"});
@@ -1388,7 +1390,9 @@ function chunkConns(keys,n){if(!CN.length)return[];const inC=k=>keys.has(k),out=
   /* no más de 3 por vía de salida para no saturar */
   const per=new Map(),res=[];for(const [,c] of out){const k=c.a;if((per.get(k)||0)>=3)continue;per.set(k,(per.get(k)||0)+1);res.push(c);if(res.length>=n)break;}
   return res;}
-function connReady(c){const A=cnA(c),B=cnB(c);if(!A||!B||!knows(A)||!knows(B))return false;if(c.v!=null&&!knows(cnV(c)))return false;return true;}
+/* giros saliendo de una autovía (A-5 → Boadilla…) no aportan para el examen */
+const hwConn=c=>{const A=cnA(c);return !!(A&&/^(Autov|Autopista)/.test(A.n));};
+function connReady(c){const A=cnA(c),B=cnB(c);if(!A||!B||!knows(A)||!knows(B)||hwConn(c))return false;if(c.v!=null&&!knows(cnV(c)))return false;return true;}
 function nextConn(n){if(!CN.length||n<=0)return[];const el=[];
   for(const c of CN){if(ST.cards["j"+c.i+"j"])continue;if(connReady(c))el.push(c);}
   const ord=c=>Math.max(CNORD.has(c.a)?CNORD.get(c.a):1e9,CNORD.has("s"+c.b)?CNORD.get("s"+c.b):1e9);
@@ -1730,7 +1734,7 @@ function matchHito(inp,name){const u=parseNm(inp,false),e=parseNm(name,false);if
   if(hit>=.99&&!extra)return{r:2,typo:true};if(hit>=.5&&extra<=1)return{r:1,why:"incompleto"};return{r:0};}
 function gradeWritten(inp,o,kind){
   if(kind==="hito"){const m=matchHito(inp,o.n);if(m.r<2){const oth=H.find(h=>h!==o&&matchHito(inp,h.n).r===2);if(oth)return{r:0,other:oth.n};}return m;}
-  const names=kind==="hc"?[o.s].concat(o.street?[o.street.n]:[]):[o.n];let best={r:0};
+  const names=kind==="hc"?[o.s].concat(o.street?[o.street.n]:[]):[o.n].concat(o.kind==="s"&&/^(Autov|Autopista)/.test(o.n)?(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n):[]);let best={r:0};
   for(const n of names){const m=matchStreet(inp,n);if(m.r>best.r||(m.r===best.r&&m.other&&!best.other))best=m;}
   if(best.r===0&&!best.other){const ex=S.find(x=>!names.includes(x.n)&&matchStreet(inp,x.n).r===2);if(ex)best={r:0,other:ex.n};}
   return best;}
@@ -1769,7 +1773,7 @@ function hideMap(on,onHint){const nm=$("nomap");nm.hidden=!on;if(!on)return;sess
 /* ---------- errores de corrección reportados por el usuario ---------- */
 let REP=lsGet("reports")||{list:[],del:[]};
 /* lo que ya he corregido: errores reportados hasta esta fecha y señales ya revisadas */
-const REPDONE=Date.parse("2026-11-24T00:26:00+01:00");
+const REPDONE=Date.parse("2026-11-24T18:45:00+01:00");
 {let ch=false;for(const r of REP.list)if(r.id<=REPDONE&&!REP.del.includes(r.id)){REP.del.push(r.id);ch=true;}if(ch)lsSet("reports",REP);}
 function saveRep(){lsSet("reports",REP);syncDirty=true;}
 function repVisible(){const d=new Set(REP.del);return REP.list.filter(r=>!d.has(r.id)).sort((a,b)=>b.id-a.id);}
