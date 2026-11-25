@@ -546,7 +546,7 @@ function lTile(i,j,cb){const k=i+"_"+j;const t=LT[k];if(t)return t.d||null;if(!B
     for(const a of d.a)APP.set(a[0]+","+a[1],[a,d.s]);
     for(const w of d.w){const L=w[2],sid=w.length>3?w[3]:-1;const nm0=d.s[w[1]]||"";for(let q=1;q<L.length;q++){ESID.set(L[q-1]+","+L[q],sid);ESID.set(L[q]+","+L[q-1],sid);if(nm0){ENM.set(L[q-1]+","+L[q],nm0);ENM.set(L[q]+","+L[q-1],nm0);}if(w[4]===2){ELINK.add(L[q-1]+","+L[q]);ELINK.add(L[q]+","+L[q-1]);}}
       if(w[4]===1){for(let q=1;q<L.length;q++){for(const [x,y] of [[L[q-1],L[q]],[L[q],L[q-1]]]){let P_=PADJ.get(x);if(!P_){P_=[];PADJ.set(x,P_);}P_.push(y);}}}}
-    d.w=d.w.filter(w=>w[4]!==1);
+    d.w=d.w.filter(w=>w[4]!==1);for(const w of d.w)w._nm=d.s[w[1]]||"";
     for(const w of d.w){const L=w[2],nm=d.s[w[1]]||"";for(let q=1;q<L.length;q++){EDGE1.set(L[q-1]+","+L[q],w[0]);EDGE1.set(L[q]+","+L[q-1],w[0]===1?-1:0);adjAdd(L[q-1],L[q],nm);predAdd(L[q],L[q-1],nm);if(w[0]!==1){adjAdd(L[q],L[q-1],nm);predAdd(L[q-1],L[q],nm);}}
     if(w[0]!==1)for(let q=0;q<L.length;q++){let T=TWN.get(L[q]);if(!T){T=[];TWN.set(L[q],T);}if(q>0)T.push(L[q-1]);if(q<L.length-1)T.push(L[q+1]);}}
     d.cells=new Map();for(const w of d.w){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of w[2]){const p=NODE.get(q);if(!p)continue;if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];}if(x0>x1)continue;for(let i=Math.floor(x0/1000);i<=Math.floor(x1/1000);i++)for(let j=Math.floor(y0/1000);j<=Math.floor(y1/1000);j++){const key=i+"_"+j;let L=d.cells.get(key);if(!L){L=[];d.cells.set(key,L);}L.push(w);}}
@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="1.00";
+const APPVER="0.1.1";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1420,7 +1420,7 @@ const KTX=["seguir recto","girar a la izquierda","girar a la derecha","cambiar d
 const cnAppr=c=>[c.f].concat(c.q||[]).concat([[c.x,c.y]]);
 const cnPath=c=>c.p?cnAppr(c).concat(c.p.slice(1)):[c.f,[c.x,c.y],c.g];
 const cnFrom=c=>esc(cnA(c).n)+(c.cz?" ("+c.cz+")":"")+" hacia el "+DIRN[c.h];
-const cnGo=c=>c.e!=null?"ir a "+cnB(c).n+" dirección "+DIRN[c.e]+" ("+(c.k===1?"a la izquierda":"a la derecha")+")":KTX[c.k]+(c.k===4?" hacia ":" a ")+cnB(c).n;
+const cnGo=c=>c.e!=null?"ir a "+cnB(c).n+" dirección "+DIRN[c.e]+(c.k===1?" (a la izquierda)":c.k===2?" (a la derecha)":c.k===0?" (siguiendo de frente)":""):KTX[c.k]+(c.k===4?" hacia ":" a ")+cnB(c).n;
 const cnAl=(L)=>(L||[]).map(b=>byKey["s"+b]).filter(Boolean).map(s=>s.n);
 const cnLinked=a=>{const o=new Set();for(const c of CN)if(c.a===a){const B=byKey["s"+c.b];if(B)o.add(B.n);for(const n of cnAl(c.ba))o.add(n);}return o;};
 const CNOPT=["Sí, girando a la izquierda","Sí, girando a la derecha","Sí, siguiendo recto","No, está prohibido"];
@@ -1430,7 +1430,7 @@ const cnA=c=>byKey[c.a],cnB=c=>byKey["s"+c.b],cnV=c=>c.v!=null?byKey["s"+c.v]:nu
 function connBudget(){rollDay();return Math.max(0,Math.round((ST.meta.min||20)*0.4)-(ST.meta.dCon||0));}
 /* conexiones de un grupo recién aprendido: primero entre las vías del grupo, luego con lo ya visto del barrio */
 function chunkConns(keys,n){if(!CN.length)return[];const inC=k=>keys.has(k),out=[];
-  for(const c of CN){if(ST.cards["j"+c.i+"j"])continue;const a=c.a,b="s"+c.b;if(!inC(a)&&!inC(b))continue;if(!connReady(c))continue;out.push([(inC(a)&&inC(b)?0:1)+(c.k===1?-0.2:0)+Math.random()*0.3,c]);}
+  for(const c of CN){if(ST.cards["j"+c.i+"j"])continue;const a=c.a,b="s"+c.b;if(!inC(a)&&!inC(b))continue;if(!connReady(c))continue;out.push([(inC(a)&&inC(b)?0:1)+(c.k===1?-0.2:0)+(c.s!==0?-0.15:0)+Math.random()*0.3,c]);}
   out.sort((x,y)=>x[0]-y[0]);
   /* no más de 3 por vía de salida para no saturar */
   const per=new Map(),res=[];for(const [,c] of out){const k=c.a;if((per.get(k)||0)>=3)continue;per.set(k,(per.get(k)||0)+1);res.push(c);if(res.length>=n)break;}
@@ -1459,8 +1459,8 @@ function cnDot(c,x,y,col,txt){const q=mapS.toScreen(x,y);c.save();c.beginPath();
 const cnCol=s=>s===0?(COL.ok||"#16a34a"):"#dc2626";
 function cnWhy(c){const A=cnA(c),B0=cnB(c),al=cnAl(c.ba),B={n:B0.n+(al.length?" (en ese tramo también se llama "+al.join(" / ")+")":"")};
   if(c.a[0]==="h"){const V=cnV(c);return "Saliendo de "+A.n+" por "+V.n+" hacia el "+DIRN[c.h]+", la primera vía del temario es "+B.n+" (a "+fmtD(c.d)+"). Allí puedes "+c.k.map(k=>KTX[k]).join(" o ")+".";}
-  const base="Por "+A.n+(c.cz?" ("+c.cz+")":"")+" hacia el "+DIRN[c.h]+", "+(c.e!=null?"ir a "+B.n+" dirección "+DIRN[c.e]+" ("+(c.k===1?"a la izquierda":"a la derecha")+")":KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n);
-  if(c.e!=null)return c.s===0?base+": se puede.":base+": no se puede.";
+  const base="Por "+A.n+(c.cz?" ("+c.cz+")":"")+" hacia el "+DIRN[c.h]+", "+(c.e!=null?"ir a "+B.n+" dirección "+DIRN[c.e]+(c.k===1?" (a la izquierda)":c.k===2?" (a la derecha)":c.k===0?" (siguiendo de frente)":""):KTX[c.k]+(c.k===4?" hacia ":" a ")+B.n);
+  if(c.e!=null)return c.s===0?base+": se puede.":base+(c.sc?": no se puede, "+B.n+" es de sentido único en la otra dirección (dirección prohibida).":": no se puede.");
   return c.s===0?base+": se puede.":c.s===2?base+": giro prohibido.":base+": no se puede, "+B.n+" va en sentido contrario (dirección prohibida).";}
 /* presentación de 1 a 3 conexiones de la misma vía o hito */
 function renderCIntro(items){
@@ -1481,6 +1481,19 @@ function renderCIntro(items){
 /* distractores: vías del temario cerca del cruce */
 function cnNear(x,y,excl,n){const out=[];const cand=S.filter(s=>!s.hw&&!excl.includes(s.n)&&s.b[0]-400<x&&s.b[2]+400>x&&s.b[1]-400<y&&s.b[3]+400>y).map(s=>[distTo(s,x,y),s]).sort((a,b)=>a[0]-b[0]);
   for(const [d,s] of cand){if(out.length>=n)break;if(!out.some(o=>o.n===s.n))out.push(s);}return out;}
+/* calzadas de una vía cerca de un cruce: líneas grises finas con flechitas de sentido
+   (para ver si vienes por la central o por el lateral, o si es de doble sentido) */
+function drawCalz(cx,name,X,Y,R){R=R||170;const M=mapS,k=M.k,tl=[];
+  for(let i=Math.floor((X-R)/8000);i<=Math.floor((X+R)/8000);i++)for(let j=Math.floor((Y-R)/8000);j<=Math.floor((Y+R)/8000);j++){const d=lTile(i,j,()=>M.draw());if(d)tl.push(d);}
+  const ws=visWays(tl,[X-R,Y-R],[X+R,Y+R]).filter(w=>w._nm===name);if(!ws.length)return;
+  const off=Math.min(9,Math.max(3,k*4));cx.save();cx.setTransform(M.dpr||1,0,0,M.dpr||1,0,0);cx.strokeStyle="#9ca3af";cx.fillStyle="#9ca3af";cx.lineWidth=2;cx.lineCap="round";cx.globalAlpha=.95;
+  const arrows=[];
+  const run=(L,o)=>{const pts=[];for(const n of L){const z=NODE.get(n);if(!z||Math.hypot(z[0]-X,z[1]-Y)>R){if(pts.length>1)draw(pts,o);pts.length=0;continue;}pts.push(M.toScreen(z[0],z[1]));}if(pts.length>1)draw(pts,o);};
+  const draw=(P,o)=>{cx.beginPath();let acc=18;for(let q=1;q<P.length;q++){const A=P[q-1],B=P[q],dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy);if(L<.5)continue;const ux=dx/L,uy=dy/L,nx=-uy*o,ny=ux*o;
+      if(q===1)cx.moveTo(A[0]+nx,A[1]+ny);cx.lineTo(B[0]+nx,B[1]+ny);while(acc<L){arrows.push([A[0]+nx+ux*acc,A[1]+ny+uy*acc,ux,uy]);acc+=46;}acc-=L;}cx.stroke();};
+  for(const w of ws){const L=w[2];if(w[0]===1)run(L,0);else{run(L,off);run(L.slice().reverse(),off);}}
+  cx.beginPath();for(const [x,y,ux,uy] of arrows){const s=4.5;cx.moveTo(x-ux*s-uy*s,y-uy*s+ux*s);cx.lineTo(x+ux*2,y+uy*2);cx.lineTo(x-ux*s+uy*s,y-uy*s-ux*s);}cx.lineWidth=2;cx.stroke();cx.restore();}
+
 function renderConn(p){
   const key=p.key,c=CNI.get(+key.slice(1,-1));if(!c){nextCard();return;}
   const A=cnA(c),B=cnB(c),isH=c.a[0]==="h",V=isH?cnV(c):A;if(!A||!B||!V){nextCard();return;}
@@ -1492,11 +1505,14 @@ function renderConn(p){
   mapS.hl=[{s:V,color:COL.target,w:2.4}];mapS.labels=[{s:V,force:true}];
   if(isH)mapS.pins=[{x:A.x,y:A.y,color:COL.pin,label:A.n}];
   const approach=cnAppr(c),alB=cnAl(c.ba),alA=cnAl(c.aa);
-  mapS.extraDraw=(cx)=>{cnArrow(cx,approach,COL.accent||"#2563eb",4,isH?[7,5]:null);if(!isH)cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
+  mapS.extraDraw=(cx)=>{if(!isH)drawCalz(cx,A.n,c.x,c.y);
+    /* en «¿se puede…?» con mapa se ve el giro completo (en ámbar, sin decir si se puede) */
+    if(!isH&&c.p&&!session._letters){cnArrow(cx,cnPath(c),"#f59e0b",4,null);}
+    cnArrow(cx,approach,COL.accent||"#2563eb",4,isH?[7,5]:null);if(!isH)cnDot(cx,c.x,c.y,COL.accent||"#2563eb");};
   {const b=[1e9,1e9,-1e9,-1e9];for(const q of approach){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
   if(lvl===2)hideMap(true);
   const reveal=()=>{hideMap(false);mapS.hl=[{s:V,color:COL.target,w:2.4},{s:B,color:isH?(COL.ok||"#16a34a"):cnCol(c.s),w:2.6}];mapS.labels=[{s:V,force:true},{s:B,force:true}];
-    mapS.extraDraw=(cx)=>{if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4,c.s?[9,6]:null);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
+    mapS.extraDraw=(cx)=>{if(!isH)drawCalz(cx,A.n,c.x,c.y);if(isH)cnArrow(cx,approach,COL.ok||"#16a34a",4,[7,5]);else cnArrow(cx,cnPath(c),cnCol(c.s),4,c.s?[9,6]:null);cnDot(cx,c.x,c.y,isH?(COL.ok||"#16a34a"):cnCol(c.s));};
     mapS.resize();{const b=[1e9,1e9,-1e9,-1e9];for(const q of isH?approach:cnPath(c)){b[0]=Math.min(b[0],q[0]);b[1]=Math.min(b[1],q[1]);b[2]=Math.max(b[2],q[0]);b[3]=Math.max(b[3],q[1]);}mapS.fit([b[0]-90,b[1]-90,b[2]+90,b[3]+90],isH?480:330);}
     mapS.draw();$("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(c))+"</div>");};
   const res=ok=>ok?(session.hint?1:2):0;
@@ -1510,6 +1526,7 @@ function renderConn(p){
     return;}
   /* vía -> vía. Nivel 1: «¿qué flecha te lleva a B?» (una letra por cada giro posible) o «¿se puede…?» con mapa. Nivel 2: «¿se puede…?» sin mapa */
   const letters=lvl===1&&c.s===0&&c.al&&c.al.length>=3&&c.k!==4&&!/^(Autov|Autopista|Carretera)/.test(cnA(c).n)&&!/^(Autov|Autopista|Carretera)/.test(cnB(c).n)&&((((cc&&cc[3])||0)+c.i)%2===0||session.practice&&Math.random()<.5);
+  session._letters=letters;
   const LT="ABCDEF",ALC=["#7c3aed","#db2777","#0891b2","#ca8a04","#4b5563","#059669"];
   if(letters){
     $("prompt").innerHTML='<div class="q">¿Qué <span class="k">flecha</span> te lleva a <b>'+esc(B.n)+"</b>? "+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b> en el sentido de la flecha azul. Cada letra es un giro que puedes hacer en este cruce.</div>";
@@ -1521,7 +1538,7 @@ function renderConn(p){
     options(c.al.map((_,j)=>LT[j]),LT[c.ac],ok=>{const fb=mapS.k,cx0=mapS.cx,cy0=mapS.cy;reveal();mapS.extraDraw=drawAlts(c.ac);mapS.k=fb;mapS.cx=cx0;mapS.cy=cy0;mapS.draw();grade(key,res(ok),p.learn);});
   }else{
     const verb={0:"seguir recto",1:"girar a la izquierda",2:"girar a la derecha",4:"tomar la salida"}[c.k]||KTX[c.k];
-    $("prompt").innerHTML='<div class="q">'+(c.e!=null?'¿<span class="k">Se puede</span> ir a <b>'+esc(B.n)+'</b> dirección <span class="k">'+DIRN[c.e]+'</span>? ':'¿<span class="k">Se puede '+verb+'</span> hacia <b>'+esc(B.n)+'</b>? ')+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+(c.cz?" ("+c.cz+")":"")+" en sentido <b>"+DIRN[c.h]+"</b>"+(lvl===1?" (flecha azul)":"")+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
+    $("prompt").innerHTML='<div class="q">'+(c.e!=null?'¿<span class="k">Se puede</span> ir a <b>'+esc(B.n)+'</b> dirección <span class="k">'+DIRN[c.e]+'</span>? ':'¿<span class="k">Se puede '+verb+'</span> hacia <b>'+esc(B.n)+'</b>? ')+lvTag+'</div><div class="extra">Vas por <b>'+esc(A.n)+"</b>"+(c.cz?" ("+c.cz+")":"")+" en sentido <b>"+DIRN[c.h]+"</b>"+(lvl===1?" (flecha azul; en ámbar, el giro por el que se pregunta)":"")+" y llegas al cruce con <b>"+esc(B.n)+"</b>.</div>";
     options(["Sí","No"],c.s===0?"Sí":"No",ok=>{reveal();grade(key,res(ok),p.learn);});
   }
 }
