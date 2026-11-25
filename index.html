@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.1.4";
+const APPVER="0.1.5";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1114,6 +1114,10 @@ function pick(){const s=session;s.n++;
   if(FC.length&&s.chunk&&s.ccDone&&!s.fcDone&&!(s.cq&&s.cq.length)){s.fcDone=true;
     const ch=FC.find(c=>c.s.some(i=>s.chunk.has("s"+i))&&fcReady(c));if(ch){s.n--;return{type:"fintro",ch};}}
   if(FC.length&&!s.fcBack&&s.done>=6&&!s.timeUp){s.fcBack=true;const ch=FC.find(fcReady);if(ch){s.n--;return{type:"fintro",ch};}}
+  /* cada ~10 tarjetas, una ruta corta del barrio (a veces una larga que solo se puede hacer de una forma) */
+  if(!s.timeUp&&s.done-(s.lastRt||0)>=10&&s.done>=6){s.lastRt=s.done;const cg=currentGroup(),g=BG[cg>=0?cg:0];
+    const ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
+    if(ks.size>=3){const long=Math.random()<.25;const r=(long&&groupRoute(ks,2,true))||groupRoute(ks,2);if(r){s.n--;return{type:"groute",r};}}}
   /* grupo cerrado con sus cruces: una ruta corta que pase por sus vías */
   if(s.chunk&&s.ccDone&&!s.grDone&&!(s.cq&&s.cq.length)){
     const pend=s.learn.filter(l=>s.cchunk&&s.cchunk.has(l.key)&&l.step===0);
@@ -1138,7 +1142,7 @@ function pick(){const s=session;s.n++;
   if(s.learn.length){s.learn.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
   /* para terminar el día: una ruta que mezcle lo ya visto del barrio en curso (lo más parecido al examen) */
   if(!s.finalRoute&&!s.timeUp&&s.done>=8){s.finalRoute=true;const cg=currentGroup(),g=BG[cg>=0?cg:0],ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
-    const r=ks.size>=4?groupRoute(ks,3):null;if(r)return{type:"groute",r};}
+    const r=ks.size>=4?(groupRoute(ks,3,true)||groupRoute(ks,3)):null;if(r)return{type:"groute",r};}
   return null;}
 function nextCard(){
   const s=session;if(s.deadline&&Date.now()>s.deadline){s.rev=[];s.learn=[];}
@@ -1709,29 +1713,45 @@ function renderStep(p){
 
 /* ---------- rutas cortas con lo que acabas de aprender ---------- */
 /* camino legal de 3 o 4 vías por conexiones ya vistas, que pase por las vías del grupo (o del barrio) */
-function groupRoute(keys,minIn){
-  if(!CN.length)return null;const G=new Map();
-  for(const c of CN){if(c.s!==0||c.k===4||c.a[0]!=="s")continue;const A=cnA(c),B=cnB(c);if(!A||!B||A.n===B.n||!knows(A)||!knows(B))continue;
-    if(!keys.has(A.key)&&!keys.has(B.key)&&!(c.k===1||c.k===2))continue;
-    if(!G.has(A.key))G.set(A.key,[]);G.get(A.key).push(c);}
-  const starts=shuffle([...keys].filter(k=>G.has(k)));let best=null,bs=-1;
-  for(const st of starts){for(let tr=0;tr<25;tr++){
-    const path=[byKey[st]],cs=[];let cur=st;
-    for(let d=0;d<3;d++){const pv=cs[cs.length-1],n8=(a,b)=>Math.min((a-b+8)%8,(b-a+8)%8)<=1;
+/* rutas cortas por conexiones ya vistas. Variadas: se evitan las que han salido hace poco.
+   long=true: ruta más larga (4-6 vías) que es la ÚNICA forma de ir de la primera a la última por lo ya visto */
+const rtSig=r=>r.route.map(o=>o.n).join(">");
+function rtRecent(){try{return JSON.parse(localStorage.getItem(LS+"rts")||"[]");}catch(e){return[];}}
+function rtMark(r){try{const L=rtRecent().filter(x=>x!==rtSig(r));L.push(rtSig(r));localStorage.setItem(LS+"rts",JSON.stringify(L.slice(-60)));}catch(e){}}
+function routeGraph(keys,loose){const G=new Map();
+  for(const c of CN){if(c.s!==0||c.k===4||c.a[0]!=="s")continue;const A=cnA(c),B=cnB(c);if(!A||!B||A.n===B.n||!knows(A)||!knows(B)||hwConn(c))continue;
+    if(!loose&&!keys.has(A.key)&&!keys.has(B.key))continue;
+    if(!G.has(A.key))G.set(A.key,[]);G.get(A.key).push(c);}return G;}
+function groupRoute(keys,minIn,long){
+  if(!CN.length)return null;const G=routeGraph(keys,long),rec=new Set(rtRecent()),cands=[],seen=new Set();
+  const n8=(a,b)=>Math.min((a-b+8)%8,(b-a+8)%8)<=1;
+  const hops=long?[4,6]:[2,3];
+  const starts=shuffle([...keys].filter(k=>G.has(k)));
+  for(const st of starts){for(let tr=0;tr<30;tr++){
+    const path=[byKey[st]],cs=[];let cur=st;const H=hops[0]+Math.floor(Math.random()*(hops[1]-hops[0]+1));
+    for(let d=0;d<H;d++){const pv=cs[cs.length-1];
       /* seguir en el sentido en que saliste: el siguiente giro va en esa dirección y más adelante por esa vía */
       const L=(G.get(cur)||[]).filter(c=>!path.some(o=>o.n===cnB(c).n)&&(!pv||(pv.e!=null&&c.h!=null&&n8(c.h,pv.e)&&((c.x-pv.x)*Math.sin(pv.e*Math.PI/4)+(c.y-pv.y)*Math.cos(pv.e*Math.PI/4))>5)));if(!L.length)break;
-      const pref=L.filter(c=>keys.has(cnB(c).key)),c=(pref.length&&Math.random()<.7?pref:L)[Math.floor(Math.random()*(pref.length&&Math.random()<.7?pref:L).length)]||L[0];
+      const pref=L.filter(c=>keys.has(cnB(c).key)),src=pref.length&&Math.random()<.7?pref:L,c=src[Math.floor(Math.random()*src.length)];
       cs.push(c);path.push(cnB(c));cur=cnB(c).key;}
-    if(path.length<3)continue;
-    const inG=path.filter(o=>keys.has(o.key)).length,turns=cs.filter(c=>c.k===1||c.k===2).length,sc=inG*2+turns+path.length;
-    if(inG>=minIn&&sc>bs){bs=sc;best={route:path,conns:cs};}}}
-  return best;}
-function renderGRoute(r){
+    if(path.length<(long?5:3))continue;
+    const r={route:path,conns:cs},sig=rtSig(r);if(seen.has(sig))continue;seen.add(sig);
+    const inG=path.filter(o=>keys.has(o.key)).length;if(inG<minIn)continue;
+    if(long&&!uniqueRoute(G,path))continue;
+    const turns=cs.filter(c=>c.k===1||c.k===2).length;cands.push([inG*2+turns+path.length-(rec.has(sig)?100:0)+Math.random()*3,r]);}}
+  if(!cands.length)return null;cands.sort((a,b)=>b[0]-a[0]);
+  const top=cands.filter(c=>c[0]>-50).slice(0,6);const pick=(top.length?top:cands.slice(0,3))[Math.floor(Math.random()*Math.min(top.length||3,6))]||cands[0];
+  if(long)pick[1].long=true;return pick[1];}
+/* ¿hay otra forma (por lo ya visto, hasta 6 vías) de ir de la primera a la última? */
+function uniqueRoute(G,path){const A=path[0].key,Z=path[path.length-1].key;let n=0;
+  const dfs=(k,vis,d)=>{if(n>1)return;if(k===Z){n++;return;}if(d>=6)return;for(const c of G.get(k)||[]){const b=cnB(c).key;if(vis.has(b))continue;vis.add(b);dfs(b,vis,d+1);vis.delete(b);if(n>1)return;}};
+  dfs(A,new Set([A]),0);return n===1;}
+function renderGRoute(r){rtMark(r);if(session)session.lastRt=session.done;
   const route=r.route,st={i:0,err:0},A=route[0],Z=route[route.length-1];
   const step=()=>{
     session.answered=false;const cur=route[st.i],nxt=route[st.i+1],c=r.conns[st.i];
-    $("st-tag").textContent="Ruta corta · paso "+(st.i+1)+"/"+(route.length-1);$("st-tag").className="tag";
-    $("prompt").innerHTML='<div class="q">Ruta de <b>'+esc(A.n)+'</b> a <b>'+esc(Z.n)+'</b></div><div class="extra">Vas por <b>'+esc(cur.n)+'</b>'+(c.h!=null?' hacia el <b>'+DIRN[c.h]+'</b>':'')+'. ¿Por qué vía <span class="k">sigues</span>?</div>';
+    $("st-tag").textContent=(r.long?"Ruta única":"Ruta corta")+" · paso "+(st.i+1)+"/"+(route.length-1);$("st-tag").className="tag";
+    $("prompt").innerHTML='<div class="q">Ruta de <b>'+esc(A.n)+'</b> a <b>'+esc(Z.n)+'</b></div>'+(r.long&&st.i===0?'<div class="extra">Con lo que llevas visto, <span class="k">solo hay una forma</span> de hacerla.</div>':'')+'<div class="extra">Vas por <b>'+esc(cur.n)+'</b>'+(c.h!=null?' hacia el <b>'+DIRN[c.h]+'</b>':'')+'. ¿Por qué vía <span class="k">sigues</span>?</div>';
     mapS.hl=route.slice(0,st.i).map(o=>({s:o,color:"#9ca3af",w:2})).concat([{s:cur,color:COL.target,w:2.6},{s:Z,color:"#7c3aed",w:2}]);
     mapS.labels=[{s:cur,force:true},{s:Z,force:true}];mapS.extraDraw=cx=>{for(let j=0;j<st.i;j++)cnArrow(cx,cnPath(r.conns[j]),"#9ca3af",3);};
     const b=[Math.min(cur.b[0],Z.b[0]),Math.min(cur.b[1],Z.b[1]),Math.max(cur.b[2],Z.b[2]),Math.max(cur.b[3],Z.b[3])];mapS.fit(b,500);
