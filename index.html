@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.99";
+const APPVER="1.00";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1821,7 +1821,7 @@ function hideMap(on,onHint){const nm=$("nomap");nm.hidden=!on;if(!on)return;sess
 /* ---------- errores de corrección reportados por el usuario ---------- */
 let REP=lsGet("reports")||{list:[],del:[]};
 /* lo que ya he corregido: errores reportados hasta esta fecha y señales ya revisadas */
-const REPDONE=Date.parse("2026-11-24T21:10:00+01:00");
+const REPDONE=Date.parse("2026-11-25T17:24:00+01:00");
 {let ch=false;for(const r of REP.list)if(r.id<=REPDONE&&!REP.del.includes(r.id)){REP.del.push(r.id);ch=true;}if(ch)lsSet("reports",REP);}
 function saveRep(){lsSet("reports",REP);syncDirty=true;}
 function repVisible(){const d=new Set(REP.del);return REP.list.filter(r=>!d.has(r.id)).sort((a,b)=>b.id-a.id);}
