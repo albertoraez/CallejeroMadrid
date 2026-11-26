@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.1.5";
+const APPVER="0.1.6";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1113,9 +1113,9 @@ function pick(){const s=session;s.n++;
   /* cadenas obligadas: cuando ya conoces todas sus calles (primero las del grupo recién aprendido) */
   if(FC.length&&s.chunk&&s.ccDone&&!s.fcDone&&!(s.cq&&s.cq.length)){s.fcDone=true;
     const ch=FC.find(c=>c.s.some(i=>s.chunk.has("s"+i))&&fcReady(c));if(ch){s.n--;return{type:"fintro",ch};}}
-  if(FC.length&&!s.fcBack&&s.done>=6&&!s.timeUp){s.fcBack=true;const ch=FC.find(fcReady);if(ch){s.n--;return{type:"fintro",ch};}}
+  if(FC.length&&!s.practice&&!s.review&&!s.fcBack&&s.done>=6&&!s.timeUp){s.fcBack=true;const ch=FC.find(fcReady);if(ch){s.n--;return{type:"fintro",ch};}}
   /* cada ~10 tarjetas, una ruta corta del barrio (a veces una larga que solo se puede hacer de una forma) */
-  if(!s.timeUp&&s.done-(s.lastRt||0)>=10&&s.done>=6){s.lastRt=s.done;const cg=currentGroup(),g=BG[cg>=0?cg:0];
+  if(!s.practice&&!s.review&&!s.timeUp&&s.done-(s.lastRt||0)>=10&&s.done>=6){s.lastRt=s.done;const cg=currentGroup(),g=BG[cg>=0?cg:0];
     const ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
     if(ks.size>=3){const long=Math.random()<.25;const r=(long&&groupRoute(ks,2,true))||groupRoute(ks,2);if(r){s.n--;return{type:"groute",r};}}}
   /* grupo cerrado con sus cruces: una ruta corta que pase por sus vías */
@@ -1141,7 +1141,7 @@ function pick(){const s=session;s.n++;
   if(s.rev.length){return{type:"card",key:s.rev.shift()};}
   if(s.learn.length){s.learn.sort((a,b)=>(isRecent(a.key)-isRecent(b.key))||a.at-b.at);const l=s.learn.shift();return{type:"card",key:l.key,learn:l};}
   /* para terminar el día: una ruta que mezcle lo ya visto del barrio en curso (lo más parecido al examen) */
-  if(!s.finalRoute&&!s.timeUp&&s.done>=8){s.finalRoute=true;const cg=currentGroup(),g=BG[cg>=0?cg:0],ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
+  if(!s.practice&&!s.review&&!s.finalRoute&&!s.timeUp&&s.done>=8){s.finalRoute=true;const cg=currentGroup(),g=BG[cg>=0?cg:0],ks=new Set((g?g.items:[]).filter(introduced).map(o=>o.key));
     const r=ks.size>=4?(groupRoute(ks,3,true)||groupRoute(ks,3)):null;if(r)return{type:"groute",r};}
   return null;}
 function nextCard(){
