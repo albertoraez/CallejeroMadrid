@@ -568,7 +568,7 @@ function streetRun(app){const out=[{app,path:[app.u,app.n]}],seen=new Set([app.u
   return out;}
 /* salidas que merece la pena enseñar: las prohibidas hacia vías sin nombre solo confunden */
 const showEx=e=>e.st===0||!!e.name;
-function visWays(tl,v0,v1){const out=[],seen=new Set();for(const d of tl){if(!d.cells)continue;for(let i=Math.floor(v0[0]/1000);i<=Math.floor(v1[0]/1000);i++)for(let j=Math.floor(v0[1]/1000);j<=Math.floor(v1[1]/1000);j++){const L=d.cells.get(i+"_"+j);if(L)for(const w of L)if(!seen.has(w)){seen.add(w);out.push(w);}}}return out;}
+function visWays(tl,v0,v1){const out=[],seen=new Set();for(const d of tl){if(!d.cells)continue;for(let i=Math.floor(v0[0]/1000);i<=Math.floor(v1[0]/1000);i++)for(let j=Math.floor(v0[1]/1000);j<=Math.floor(v1[1]/1000);j++){const L=d.cells.get(i+"_"+j);if(L)for(const w of L)if(!seen.has(w)&&w[4]!==3){seen.add(w);out.push(w);}}}return out;}
 /* distritos y barrios */
 function decRings(L){return L.map(fl=>{const a=new Float32Array(fl.length);let x=0,y=0;for(let i=0;i<fl.length;i+=2){x+=fl[i];y+=fl[i+1];a[i]=x;a[i+1]=y;}return a;});}
 const ADMD=ADM.dist.map(d=>({n:d.n,c:d.c,R:decRings(d.r)})),ADMB=ADM.bar.map(b=>({n:b.n,d:b.d,c:b.c,R:decRings(b.r)}));
@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.1.7";
+const APPVER="0.1.8";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
