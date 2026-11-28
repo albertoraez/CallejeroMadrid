@@ -948,7 +948,7 @@ function drawRestr(c,x,y,r){const only=r[2]>=5,col=only?COL.accent:"#d0302b";
   if(!only){c.save();c.translate(x,y);c.beginPath();c.moveTo(-6.7,-6.7);c.lineTo(6.7,6.7);c.strokeStyle=col;c.lineWidth=2.2;c.stroke();c.restore();}}
 
 /* ---------- state + storage ---------- */
-const APPVER="0.1.8";
+const APPVER="0.1.9";
 const LS="cbm1:";
 const ST={cards:{},meta:{min:20,npd:15,cpd:10,dCon:0,zone:-1,dDay:0,dNew:0,dRev:0,extra:0,streak:0,lastDay:0,ts:0}};
 const chunkOf=key=>key[0]+Math.floor(parseInt(key.slice(1))/150);
@@ -1364,15 +1364,23 @@ function renderCard(p){
     /* solo vías que tocan de verdad la resaltada (cruce directo, no enlaces lejanos) */
     const ovS=new Set((OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n));
     session.lastV="cruce";
-    const linked=[...new Set(CN.filter(c=>c.a==="s"+o.i&&c.s===0&&c.k!==4).map(c=>cnB(c)).filter(B=>B&&B.n!==o.n&&touches(o,B)).map(B=>B.n).concat(nearest(o,S,24).filter(x=>x.n!==o.n&&!ovS.has(x.n)&&touches(o,x)).map(x=>x.n)))].filter(n=>{const B=S.find(x=>x.n===n);return B&&linkSeen(o,B);});
+    /* solo vías a las que se puede PASAR circulando por la resaltada (giro legal desde ella), y conexiones ya vistas */
+    const legal=CN.filter(c=>c.a==="s"+o.i&&c.s===0&&c.k!==4&&!hwConn(c)&&cnB(c)&&cnB(c).n!==o.n);
+    const reach=new Set(legal.map(c=>cnB(c).n));
+    const seenL=legal.filter(c=>linkSeen(o,cnB(c)));
     const ovA=(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n);
-    if(linked.length){const right=linked[Math.floor(Math.random()*linked.length)],ex=new Set([o.n,...linked,...ovA]);
-      const ds=shuffle(nearest(o,S,18).filter(x=>!ex.has(x.n)&&!touches(o,x,40))).slice(0,3).map(x=>x.n);
-      if(ds.length>=2){const B=S.find(x=>x.n===right);
-        $("prompt").innerHTML='<div class="q">¿Con qué vía <span class="k">se cruza o enlaza</span>?</div><div class="placa">'+esc(o.n)+'</div><div class="extra">No te pregunto qué vía es: te digo cuál es la resaltada y tienes que elegir la que se cruza con ella.</div>';
-        mapS.hl=[{s:o,color:COL.target}];mapS.fit(o.b,spanOf(o,1.7,320));
-        options(shuffle(ds.concat([right])),right,ok=>{mapS.hl=[{s:o,color:COL.target},{s:B,color:COL.ok||"#16a34a"}];mapS.labels=[{s:o,force:true},{s:B,force:true}];mapS.fit([Math.min(o.b[0],B.b[0]),Math.min(o.b[1],B.b[1]),Math.max(o.b[2],B.b[2]),Math.max(o.b[3],B.b[3])],400);
-          $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">La resaltada es <b>'+esc(o.n)+"</b>.</div>");grade(key,ok?2:0,p.learn);});
+    if(seenL.length){const rc=seenL[Math.floor(Math.random()*seenL.length)],B=cnB(rc),right=B.n,ex=new Set([o.n,...reach,...ovA]);
+      /* incorrectas: alguna que se toca con ella pero a la que no se puede pasar (sentido contrario…) y otras cercanas */
+      /* fuera también las que se alcanzan en dos pasos (siguiendo por la calle a la que pasas) y las que tocan la resaltada */
+      for(const c of legal){const B2=cnB(c);for(const d of CN)if(d.a==="s"+B2.i&&d.s===0&&cnB(d))ex.add(cnB(d).n);}
+      const ds=shuffle(nearest(o,S,20).filter(x=>!ex.has(x.n)&&!touches(o,x,40))).slice(0,3).map(x=>x.n);
+      if(ds.length>=2){
+        $("prompt").innerHTML='<div class="q">Circulando por <b>'+esc(o.n)+'</b>, ¿a qué vía <span class="k">puedes pasar</span>?</div><div class="extra">Solo vale una a la que se pueda girar o seguir respetando el sentido de la calle resaltada.</div>';
+        mapS.hl=[{s:o,color:COL.target}];mapS.showDir=true;mapS.fit(o.b,spanOf(o,1.7,320));
+        options(shuffle(ds.concat([right])),right,ok=>{mapS.hl=[{s:o,color:COL.target},{s:B,color:COL.ok||"#16a34a"}];mapS.labels=[{s:o,force:true},{s:B,force:true}];
+          mapS.extraDraw=cx=>cnArrow(cx,cnPath(rc),COL.ok||"#16a34a",4);
+          mapS.fit([Math.min(o.b[0],B.b[0]),Math.min(o.b[1],B.b[1]),Math.max(o.b[2],B.b[2]),Math.max(o.b[3],B.b[3])],400);
+          $("prompt").insertAdjacentHTML("beforeend",'<div class="extra">'+esc(cnWhy(rc))+'</div>');grade(key,ok?2:0,p.learn);});
         return;}}}
   if(type==="n"){
     const ovN=o.kind==="s"?(OVL[o.i]||[]).concat(ALI[o.i]||[]).map(i=>byKey["s"+i]).filter(Boolean).map(x=>x.n):[];
